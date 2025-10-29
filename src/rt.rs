@@ -1,4 +1,6 @@
-use glam::{DVec2, DVec3, UVec2, Vec3};
+#![allow(unused)]
+
+use glam::{DVec2, DVec3, IVec2, Vec3};
 
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -126,8 +128,8 @@ pub struct Camera {
     up: DVec3,
 
     focal_length: f64,
-    image_width: u32,
-    image_height: u32,
+    image_width: i32,
+    image_height: i32,
 
     pixel00: DVec3,
     pixel_delta_u: DVec3,
@@ -140,8 +142,8 @@ impl Camera {
         dir: DVec3,
         up: DVec3,
         focal_length: f64,
-        image_width: u32,
-        image_height: u32,
+        image_width: i32,
+        image_height: i32,
     ) -> Self {
         assert!(dir.is_normalized());
         assert!(up.is_normalized());
@@ -175,7 +177,7 @@ impl Camera {
         }
     }
 
-    pub fn get_ray(&self, i: u32, j: u32) -> Ray2d {
+    pub fn get_ray(&self, i: i32, j: i32) -> Ray2d {
         let rand_pixel: DVec2 = rand::random::<DVec2>() - DVec2::ONE / 2.;
 
         let pixel_center = self.pixel00
@@ -234,7 +236,7 @@ impl World {
         }
     }
 
-    pub fn compute_pixel(&self, i: u32, j: u32) -> Color {
+    pub fn compute_pixel(&self, i: i32, j: i32) -> Color {
         let color: Color = (0..self.render_params.spp)
             .into_par_iter()
             .map(|_| {
@@ -260,10 +262,11 @@ impl World {
                 let color = self.compute_pixel(i, j);
 
                 img.draw_pixel(
-                    UVec2::new(i, self.camera.image_height - j - 1),
+                    IVec2::new(i, self.camera.image_height - j - 1),
                     color,
-                    &Blending::Replace,
-                );
+                    Blending::Replace,
+                )
+                .unwrap();
             }
         }
 

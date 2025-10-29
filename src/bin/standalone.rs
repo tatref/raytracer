@@ -3,6 +3,7 @@
 
 //
 // https://raytracing.github.io/books/RayTracingInOneWeekend.html
+// https://www.pbr-book.org/4ed/contents
 // https://bheisler.github.io/post/writing-raytracer-in-rust-part-3/
 //
 
