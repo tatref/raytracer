@@ -638,40 +638,37 @@ impl World {
             let p = pixel.as_dvec2() + rand::random::<DVec2>() - DVec2::ONE / 2.;
             let ray = Ray2d::rand(p);
 
-            let col = self.trace_ray(&ray, recursion_limit);
+            let (_t, col) = self.trace_ray(&ray, recursion_limit);
             color += col;
         }
         color / spp as f32
     }
 
-    pub fn trace_ray(&self, ray: &Ray2d, depth: usize) -> Color {
+    pub fn trace_ray(&self, ray: &Ray2d, depth: usize) -> (f64, Color) {
         if depth == 0 {
-            return Color::ZERO;
+            return (0., Color::ZERO);
         }
 
         // Vec version
-        //let mut hits: Vec<(Object, Hit2d)> = self
-        //    .objects
-        //    .iter()
-        //    .filter_map(|obj| ray.hit(&obj.shape).map(|hit| (obj.clone(), hit)))
-        //    .collect();
-        //hits.sort_by(|(_, a), (_, b)| a.t.total_cmp(&b.t));
-        //let Some((obj, hit)) = hits.first() else {
+        let mut hits: Vec<(Object, Hit2d)> = self
+            .objects
+            .iter()
+            .filter_map(|obj| ray.hit(&obj.shape).map(|hit| (obj.clone(), hit)))
+            .collect();
+        hits.sort_by(|(_, a), (_, b)| a.t.total_cmp(&b.t));
+        let Some((obj, hit)) = hits.first() else {
+            return (0., Color::ZERO);
+        };
+
+        // Quadtree version
+        //let hit: Option<(Object, Hit2d)> = self.quadtree.hit(ray);
+        //let Some((obj, hit)) = hit else {
         //    return Color::ZERO;
         //};
 
-        // Quadtree version
-        let hit: Option<(Object, Hit2d)> = self.quadtree.hit(ray);
-        let Some((obj, hit)) = hit else {
-            return Color::ZERO;
-        };
-
         if hit.side == Side::Inside {
             match obj.mat {
-                Material::Emissive {
-                    emission_color,
-                    d: _,
-                } => emission_color,
+                Material::Emissive { emission_color, d } => (d, emission_color),
                 Material::Dielectric { ior } => {
                     let p = hit.p + hit.n * 10000. * f64::EPSILON;
                     let refracted_ray = ray.dir.refract(-hit.n, 1. / ior);
@@ -680,11 +677,11 @@ impl World {
                     } else {
                         Ray2d::new(p, refracted_ray)
                     };
-                    let col = self.trace_ray(&r, depth - 1);
+                    let (d2, col) = self.trace_ray(&r, depth - 1);
 
-                    col
+                    (hit.t + d2, col)
                 }
-                _ => Color::ZERO,
+                _ => (0., Color::ZERO),
             }
         } else {
             // outside
@@ -694,13 +691,14 @@ impl World {
                     let p = hit.p + hit.n * 10000. * f64::EPSILON;
                     let r = Ray2d::rand_hemisphere(p, hit.n);
 
-                    let col = self.trace_ray(&r, depth - 1);
+                    let (d2, col) = self.trace_ray(&r, depth - 1);
 
-                    absorption * col * 2.
+                    // FIXME x2?
+                    (hit.t + d2, absorption * col * 2.)
                 }
                 Material::Emissive { emission_color, d } => {
                     let distance_coeff = 1. / (hit.t + d);
-                    emission_color * distance_coeff as f32
+                    (hit.t + d, emission_color * distance_coeff as f32)
                     //(Color::ONE + hit.n.as_vec2().extend(0.)) * distance_coeff as f32
                 }
                 Material::DirectionalEmissive {
@@ -710,9 +708,9 @@ impl World {
                 } => {
                     if ray.dir.dot(-hit.n) >= angle {
                         let distance_coeff = 1. / (hit.t + d);
-                        emission_color * distance_coeff as f32
+                        (hit.t + d, emission_color * distance_coeff as f32)
                     } else {
-                        Color::ZERO
+                        (0., Color::ZERO)
                     }
                 }
                 Material::Reflective => {
@@ -720,7 +718,8 @@ impl World {
                     let p = hit.p + hit.n * 10000. * f64::EPSILON;
                     let r = Ray2d::new(p, ray.dir.reflect(hit.n));
 
-                    self.trace_ray(&r, depth - 1)
+                    let (t, col) = self.trace_ray(&r, depth - 1);
+                    (hit.t + t, col)
                 }
                 Material::Dielectric { ior } => {
                     let p = hit.p - hit.n * 10000. * f64::EPSILON;
@@ -730,7 +729,8 @@ impl World {
                     } else {
                         Ray2d::new(p, refracted_ray)
                     };
-                    self.trace_ray(&r, depth - 1)
+                    let (t, col) = self.trace_ray(&r, depth - 1);
+                    (hit.t + t, col)
                 }
             }
         }
@@ -758,13 +758,8 @@ impl World {
             }
         }
 
-        //for obj in &self.objects {
-        //    let aabb_color = Color::new(1., 0., 1.);
-        //    obj.draw_aabb(&mut raw_image, aabb_color);
-        //}
-
-        let aabb_color = Color::new(1., 0., 1.);
-        self.quadtree.draw(&mut raw_image, aabb_color);
+        //let aabb_color = Color::new(1., 0., 1.);
+        //self.quadtree.draw(&mut raw_image, aabb_color);
 
         let image = raw_image.convert_to_image(&ToneMappingMethod::Reinhard);
         image.save("raw.png").unwrap();

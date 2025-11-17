@@ -13,14 +13,14 @@ use raytracer::{
 fn sample_world(t: f64) -> World {
     let mut objects = Vec::new();
 
-    for _ in 0..50 {
-        let center = rand::random::<DVec2>() * DVec2::new(300., 200.) + DVec2::new(200., 300.);
-        let light = Object::new(
-            Shape::Circle(Circle::new(center, 1.)),
-            Material::emissive_at(50., Color::ONE * 10.),
-        );
-        objects.push(light);
-    }
+    //for _ in 0..50 {
+    //    let center = rand::random::<DVec2>() * DVec2::new(300., 200.) + DVec2::new(200., 300.);
+    //    let light = Object::new(
+    //        Shape::Circle(Circle::new(center, 1.)),
+    //        Material::emissive_at(50., Color::ONE * 10.),
+    //    );
+    //    objects.push(light);
+    //}
 
     let light = Object::new(
         Shape::Circle(Circle::new(DVec2::new(600., 400.), 20.)),
@@ -237,7 +237,7 @@ fn annotate(raw_image: &mut RawImage, render_params: &RenderParams) {
 fn main() {
     let width = 800;
     let height = 600;
-    let spp = 50;
+    let spp = 5000;
     let recursion_limit = 10;
 
     let denoiser = Denoiser {
@@ -253,26 +253,26 @@ fn main() {
         denoiser: None,
     };
 
-    //let max = 50;
-    //for idx in 0..max {
-    //    println!("{}/{}", idx, max - 1);
-
-    //    let t = idx as f64 / max as f64;
-    //    let world = sample_world(t);
-
-    //    let mut raw_image = world.render(&render_params);
-    //    annotate(&mut raw_image, &render_params);
-
-    //    let image = raw_image.convert_to_image(&ToneMappingMethod::Reinhard);
-    //    image.save(&format!("out/out_{:04}.png", idx)).unwrap();
-    //}
-
-    let t = 0.;
-    let world = complex_world(t);
+    let max = 100;
     let chrono = std::time::Instant::now();
-    let mut raw_image = world.render(&render_params);
+    for idx in 0..max {
+        println!("{}/{}", idx, max - 1);
+
+        let t = idx as f64 / max as f64;
+        let world = sample_world(t);
+
+        let mut raw_image = world.render(&render_params);
+        annotate(&mut raw_image, &render_params);
+
+        let image = raw_image.convert_to_image(&ToneMappingMethod::Reinhard);
+        image.save(&format!("out/out_{:04}.png", idx)).unwrap();
+    }
     let elapsed = chrono.elapsed();
     dbg!(elapsed);
+
+    let t = 0.;
+    let world = sample_world(t);
+    let mut raw_image = world.render(&render_params);
     annotate(&mut raw_image, &render_params);
     let image = raw_image.convert_to_image(&ToneMappingMethod::Reinhard);
     image.save(&format!("out.png")).unwrap();
