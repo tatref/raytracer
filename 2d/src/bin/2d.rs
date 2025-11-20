@@ -5,9 +5,9 @@ use std::f64::consts::PI;
 use glam::{DVec2, IVec2};
 use rand::{Rng, random_range, rng, seq::IndexedRandom};
 use raytracer::{
+    Color,
     img::{Blending, RawImage, ToneMappingMethod},
     librt2d::*,
-    rt::Color,
 };
 
 use noise_functions::{CellDistance, Noise, NoiseFn, OpenSimplex2s, OpenSimplexNoise, Perlin};
@@ -293,7 +293,7 @@ fn annotate(raw_image: &mut RawImage, render_params: &RenderParams) {
 fn main() {
     let width = 800;
     let height = 600;
-    let spp = 5000;
+    let spp = 500;
     let recursion_limit = 10;
 
     let denoiser = Some(Denoiser {
@@ -310,30 +310,30 @@ fn main() {
         denoiser: None,
     };
 
-    let max = 60;
-    let chrono = std::time::Instant::now();
-    for idx in 0..max {
-        println!("{}/{}", idx, max - 1);
-
-        let t = idx as f64 / max as f64;
-        let world = sample_world(t, idx);
-
-        let mut raw_image = world.render(&render_params);
-        annotate(&mut raw_image, &render_params);
-
-        let image = raw_image.convert_to_image(&ToneMappingMethod::Reinhard);
-        image.save(&format!("out/out_{:04}.png", idx)).unwrap();
-    }
-    let elapsed = chrono.elapsed();
-    dbg!(elapsed);
-
-    //let t = 0.;
-    //let world = sample_world(t, 0);
+    //let max = 60;
     //let chrono = std::time::Instant::now();
-    //let mut raw_image = world.render(&render_params);
+    //for idx in 0..max {
+    //    println!("{}/{}", idx, max - 1);
+
+    //    let t = idx as f64 / max as f64;
+    //    let world = sample_world(t, idx);
+
+    //    let mut raw_image = world.render(&render_params);
+    //    annotate(&mut raw_image, &render_params);
+
+    //    let image = raw_image.convert_to_image(&ToneMappingMethod::Reinhard);
+    //    image.save(&format!("out/out_{:04}.png", idx)).unwrap();
+    //}
     //let elapsed = chrono.elapsed();
     //dbg!(elapsed);
-    //annotate(&mut raw_image, &render_params);
-    //let image = raw_image.convert_to_image(&ToneMappingMethod::Reinhard);
-    //image.save(&format!("out.png")).unwrap();
+
+    let t = 0.;
+    let world = sample_world(t, 0);
+    let chrono = std::time::Instant::now();
+    let mut raw_image = world.render(&render_params);
+    let elapsed = chrono.elapsed();
+    dbg!(elapsed);
+    annotate(&mut raw_image, &render_params);
+    let image = raw_image.convert_to_image(&ToneMappingMethod::Reinhard);
+    image.save(&format!("out.png")).unwrap();
 }

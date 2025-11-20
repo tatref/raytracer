@@ -1,8 +1,8 @@
 use std::{collections::HashSet, f64::consts::PI};
 
 use crate::{
+    Color,
     img::{Blending, RawImage, ToneMappingMethod},
-    rt::Color,
 };
 use glam::{DVec2, IVec2, Vec3};
 use itertools::{Itertools, iproduct};
@@ -768,20 +768,26 @@ impl World {
         }
     }
 
+    pub fn render_column(&self, render_params: &RenderParams, i: i32) -> Vec<(i32, Color)> {
+        let pixels: Vec<(i32, Color)> = (0..render_params.height)
+            .into_par_iter()
+            .map(|j| {
+                let pixel = IVec2::new(i, j);
+                let color =
+                    self.compute_pixel(pixel, render_params.spp, render_params.recursion_limit);
+                (j, color)
+            })
+            .collect();
+        pixels
+    }
+
     pub fn render(&self, render_params: &RenderParams) -> RawImage {
         let mut raw_image = RawImage::new(render_params.width, render_params.height);
 
         // parallel v1
         for i in 0..render_params.width {
-            let pixels: Vec<(i32, Color)> = (0..render_params.height)
-                .into_par_iter()
-                .map(|j| {
-                    let pixel = IVec2::new(i, j);
-                    let color =
-                        self.compute_pixel(pixel, render_params.spp, render_params.recursion_limit);
-                    (j, color)
-                })
-                .collect();
+            let pixels = self.render_column(render_params, i);
+
             for (j, color) in pixels {
                 let pixel = IVec2::new(i, j);
                 raw_image
