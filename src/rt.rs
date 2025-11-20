@@ -232,7 +232,7 @@ impl World {
 
                 0.5 * self.trace_ray(objects, bounce_ray, bounce_limit - 1)
             }
-            None => Self::get_background_color(&ray),
+            None => Self::get_background_color(&ray) / 100.,
         }
     }
 

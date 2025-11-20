@@ -280,21 +280,35 @@ impl Circle {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct Bezier {
-    a: DVec2,
-    b: DVec2,
-    c: DVec2,
+    control_points: Vec<DVec2>,
 }
 
 impl Bezier {
-    pub fn new(a: DVec2, b: DVec2, c: DVec2) -> Self {
-        Self { a, b, c }
+    pub fn new(control_points: &[DVec2]) -> Self {
+        Self {
+            control_points: control_points.iter().cloned().collect(),
+        }
+    }
+
+    pub fn new_quadratic(a: DVec2, b: DVec2, c: DVec2) -> Self {
+        let control_points = vec![a, b, c];
+        Bezier::new(&control_points)
+    }
+
+    pub fn new_cubic(a: DVec2, b: DVec2, c: DVec2, d: DVec2) -> Self {
+        let control_points = vec![a, b, c, d];
+        Bezier::new(&control_points)
     }
 
     pub fn aabb(&self) -> Aabb {
-        let max = self.a.max(self.b).max(self.c);
-        let min = self.a.min(self.b).min(self.c);
+        let mut max = DVec2::MAX;
+        let mut min = DVec2::MIN;
+        for p in &self.control_points {
+            max = min.min(*p);
+            min = max.min(*p);
+        }
 
         let mid = min.midpoint(max);
         let half_size = (max - min) / 2.;
@@ -303,12 +317,26 @@ impl Bezier {
     }
 
     pub fn at(&self, t: f64) -> DVec2 {
-        let ab = self.a.lerp(self.b, t);
-        let bc = self.b.lerp(self.c, t);
-        ab.lerp(bc, t)
+        let order = self.control_points.len();
+
+        let mut previous_segments = self.control_points.clone();
+
+        for _ in 1..order {
+            let mut new_segments = Vec::new();
+
+            for tuple in previous_segments.windows(2) {
+                let p = tuple[0].lerp(tuple[1], t);
+                new_segments.push(p);
+            }
+
+            previous_segments = new_segments;
+        }
+
+        assert_eq!(previous_segments.len(), 1);
+        previous_segments[0]
     }
 
-    pub fn resolution(&self, resolution: usize) -> Vec<Segment> {
+    pub fn as_segments(&self, resolution: usize) -> Vec<Segment> {
         let segments: Vec<Segment> = (0..resolution)
             .map(|t| t as f64 / resolution as f64)
             .tuple_windows()
@@ -394,6 +422,12 @@ pub struct Strip {
 }
 
 impl Strip {
+    pub fn new(strip: &[Segment]) -> Self {
+        Self {
+            strip: strip.iter().cloned().collect(),
+        }
+    }
+
     pub fn hit(&self, ray: &Ray2d) -> Option<Hit2d> {
         let mut hits: Vec<Hit2d> = self
             .strip
@@ -558,8 +592,8 @@ impl Object {
         Self { shape, mat }
     }
 
-    pub fn bezier(a: DVec2, b: DVec2, c: DVec2, resolution: usize, mat: Material) -> Self {
-        let strip = Bezier::new(a, b, c).resolution(resolution);
+    pub fn bezier(points: &[DVec2], resolution: usize, mat: Material) -> Self {
+        let strip = Bezier::new(points).as_segments(resolution);
         let strip = Strip { strip };
 
         Object {
@@ -693,13 +727,11 @@ impl World {
 
                     let (d2, col) = self.trace_ray(&r, depth - 1);
 
-                    // FIXME x2?
-                    (hit.t + d2, absorption * col * 2.)
+                    (hit.t + d2, absorption * col)
                 }
                 Material::Emissive { emission_color, d } => {
                     let distance_coeff = 1. / (hit.t + d);
                     (hit.t + d, emission_color * distance_coeff as f32)
-                    //(Color::ONE + hit.n.as_vec2().extend(0.)) * distance_coeff as f32
                 }
                 Material::DirectionalEmissive {
                     emission_color,

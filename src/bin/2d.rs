@@ -3,15 +3,48 @@
 use std::f64::consts::PI;
 
 use glam::{DVec2, IVec2};
-use rand::seq::IndexedRandom;
+use rand::{Rng, random_range, rng, seq::IndexedRandom};
 use raytracer::{
     img::{Blending, RawImage, ToneMappingMethod},
     librt2d::*,
     rt::Color,
 };
 
-fn sample_world(t: f64) -> World {
+use noise_functions::{CellDistance, Noise, NoiseFn, OpenSimplex2s, OpenSimplexNoise, Perlin};
+struct NoiseLoop {
+    center: DVec2,
+    r: f64,
+    zoom: f64,
+    scale: f64,
+}
+impl NoiseLoop {
+    fn new(center: DVec2, r: f64, zoom: f64, scale: f64) -> Self {
+        Self {
+            center,
+            r,
+            zoom,
+            scale,
+        }
+    }
+    /// t: [0, 1]
+    fn at(&self, t: f64, z: f64) -> f64 {
+        let angle = 2. * PI * t;
+        let p = self.center + DVec2::from_angle(angle) * self.r;
+        let p = p.extend(z) * self.zoom;
+
+        let val = Perlin.add_seed(0).sample3(p.as_vec3());
+        val as f64 * self.scale
+    }
+}
+
+fn sample_world(t: f64, idx: u64) -> World {
     let mut objects = Vec::new();
+
+    use rand::RngCore;
+    use rand::prelude::*;
+    use rand_chacha::ChaCha20Rng;
+
+    let mut rng = ChaCha20Rng::seed_from_u64(2);
 
     //for _ in 0..50 {
     //    let center = rand::random::<DVec2>() * DVec2::new(300., 200.) + DVec2::new(200., 300.);
@@ -72,19 +105,40 @@ fn sample_world(t: f64) -> World {
     );
     objects.push(big_light);
 
-    //let absorb = Object::new(
-    //    Shape::Circle(Circle::new(DVec2::new(200., 300.), 20.)),
-    //    Material::diffuse(Color::new(0.9, 0.1, 0.1)),
-    //);
-    //objects.push(absorb);
+    // wavy bezier
+    let start_x = 400.;
+    let end_x = 800.;
+    let y = 100.;
 
-    let mirror = Object::new(
-        Shape::Circle(Circle::new(DVec2::new(700., 100.), 40.)),
-        //Material::diffuse(Color::new(1., 0., 0.)),
-        Material::Reflective,
+    let n_points = 30;
+    let mut points = Vec::new();
+    //points.push(DVec2::new(400., 100.));
+
+    let noise_loop = NoiseLoop::new(DVec2::ZERO, 1., 1., 10.);
+
+    for i in 0..n_points {
+        let x = start_x + (end_x - start_x) * (i as f64 / n_points as f64);
+        let dy = /*noise_loop.at(t, i as f64 / n_points as f64) */
+             ((i as f64 / n_points as f64 + t) * 2. * PI).sin() * 10.;
+        let p = DVec2::new(x, y + dy);
+        points.push(p);
+    }
+    //points.push(DVec2::new(800., 100.));
+
+    let bezier = Bezier::new(&points);
+    let strip = bezier.as_segments(100);
+    let bezier_strip = Strip::new(&strip);
+    //let bezier_obj = Object::new(Shape::Strip(bezier_strip), Material::diffuse(Color::ONE));
+    let bezier_obj = Object::new(Shape::Strip(bezier_strip), Material::dieletric(1.5));
+    objects.push(bezier_obj);
+
+    let wall = Object::new(
+        Shape::Segment(Segment::new(DVec2::new(400., 0.), DVec2::new(800., 0.))),
+        Material::diffuse(Color::ONE),
     );
-    objects.push(mirror);
 
+    // ?
+    objects.push(wall);
     let wall = Object::new(
         Shape::Segment(Segment::new(DVec2::new(0., 250.), DVec2::new(100., 250.))),
         Material::diffuse(Color::ONE),
@@ -166,12 +220,14 @@ fn sample_world(t: f64) -> World {
     objects.push(mirror);
 
     let bezier = Object::bezier(
-        DVec2::new(200., 50.),
-        DVec2::new(300., 50.),
-        DVec2::new(300., 150.),
+        &[
+            DVec2::new(200., 50.),
+            DVec2::new(300., 50.),
+            DVec2::new(300., 150.),
+        ],
         4,
-        Material::diffuse(Color::new(1., 0., 0.)),
-        //Material::Reflective,
+        //Material::diffuse(Color::new(1., 0., 0.)),
+        Material::Reflective,
     );
     objects.push(bezier);
 
@@ -240,26 +296,27 @@ fn main() {
     let spp = 5000;
     let recursion_limit = 10;
 
-    let denoiser = Denoiser {
-        top: 0.001,
+    let denoiser = Some(Denoiser {
+        top: 0.01,
         oversample_factor: 10.,
         mask_size: 2,
-    };
+    });
     let render_params = RenderParams {
         height,
         spp,
         width,
         recursion_limit,
+        //denoiser,
         denoiser: None,
     };
 
-    let max = 100;
+    let max = 60;
     let chrono = std::time::Instant::now();
     for idx in 0..max {
         println!("{}/{}", idx, max - 1);
 
         let t = idx as f64 / max as f64;
-        let world = sample_world(t);
+        let world = sample_world(t, idx);
 
         let mut raw_image = world.render(&render_params);
         annotate(&mut raw_image, &render_params);
@@ -270,10 +327,13 @@ fn main() {
     let elapsed = chrono.elapsed();
     dbg!(elapsed);
 
-    let t = 0.;
-    let world = sample_world(t);
-    let mut raw_image = world.render(&render_params);
-    annotate(&mut raw_image, &render_params);
-    let image = raw_image.convert_to_image(&ToneMappingMethod::Reinhard);
-    image.save(&format!("out.png")).unwrap();
+    //let t = 0.;
+    //let world = sample_world(t, 0);
+    //let chrono = std::time::Instant::now();
+    //let mut raw_image = world.render(&render_params);
+    //let elapsed = chrono.elapsed();
+    //dbg!(elapsed);
+    //annotate(&mut raw_image, &render_params);
+    //let image = raw_image.convert_to_image(&ToneMappingMethod::Reinhard);
+    //image.save(&format!("out.png")).unwrap();
 }

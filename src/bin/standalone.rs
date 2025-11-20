@@ -49,7 +49,7 @@ fn main() {
             objects.push(Object::Sphere(ground));
 
             let render_params = RenderParams {
-                spp: 32,
+                spp: 512,
                 bounce_limit: 10,
             };
             let world = World::new(camera, objects, render_params);
@@ -61,15 +61,7 @@ fn main() {
 
             println!("{:?}", elapsed);
 
-            for (idx, tone_mapping) in [
-                ToneMappingMethod::Reinhard,
-                ToneMappingMethod::Gamma { gamma: 2.2 },
-                ToneMappingMethod::Gamma { gamma: 2. },
-                ToneMappingMethod::Gamma { gamma: 2.4 },
-            ]
-            .iter()
-            .enumerate()
-            {
+            for (idx, tone_mapping) in [ToneMappingMethod::Reinhard].iter().enumerate() {
                 let image = raw_image.convert_to_image(tone_mapping);
                 image
                     .save(&format!("out_foc={}_idx={}.png", focal_length, idx))
