@@ -293,7 +293,7 @@ fn annotate(raw_image: &mut RawImage, render_params: &RenderParams) {
 fn main() {
     let width = 800;
     let height = 600;
-    let spp = 500;
+    let spp = 50;
     let recursion_limit = 10;
 
     let denoiser = Some(Denoiser {

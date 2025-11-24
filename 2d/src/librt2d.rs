@@ -7,7 +7,9 @@ use crate::{
 use glam::{DVec2, IVec2, Vec3};
 use itertools::{Itertools, iproduct};
 use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
+use serde::{Deserialize, Serialize};
 
+#[derive(Serialize, Deserialize)]
 pub struct Node {
     objects: Vec<Object>,
     aabb: Aabb,
@@ -138,7 +140,7 @@ impl Node {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Serialize, Deserialize)]
 pub struct Aabb {
     center: DVec2,
     half_size: DVec2,
@@ -226,7 +228,7 @@ impl Aabb {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Serialize, Deserialize)]
 pub struct Circle {
     center: DVec2,
     r: f64,
@@ -280,7 +282,7 @@ impl Circle {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Bezier {
     control_points: Vec<DVec2>,
 }
@@ -352,7 +354,7 @@ impl Bezier {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Serialize, Deserialize)]
 pub struct Segment {
     a: DVec2,
     b: DVec2,
@@ -416,7 +418,7 @@ impl Segment {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Strip {
     strip: Vec<Segment>,
 }
@@ -456,7 +458,7 @@ impl Strip {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub enum Shape {
     Circle(Circle),
     Segment(Segment),
@@ -522,7 +524,7 @@ impl Ray2d {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Serialize, Deserialize)]
 pub enum Material {
     Emissive {
         /// emission color
@@ -576,7 +578,7 @@ impl Material {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Object {
     shape: Shape,
     mat: Material,
@@ -645,6 +647,7 @@ pub struct Denoiser {
     pub oversample_factor: f32,
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct World {
     //light: Light,
     objects: Vec<Object>,
