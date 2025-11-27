@@ -3,7 +3,11 @@ use std::clone;
 use eframe::egui::{self, CollapsingHeader, Image, TextureHandle, TextureOptions, Ui};
 use glam::DVec2;
 use image::{EncodableLayout, ImageBuffer, Rgba};
-use raytracer::{Color, img::ToneMappingMethod, librt2d::*};
+use raytracer::{
+    Color,
+    img::{RawImage, ToneMappingMethod},
+    librt2d::*,
+};
 
 fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
@@ -40,7 +44,7 @@ enum MaterialKind {
 struct MyApp<'a> {
     world: World,
     texture_handle: Option<TextureHandle>,
-    current_image: Option<Image<'a>>,
+    current_image: Option<(Image<'a>, RawImage)>,
 }
 
 impl<'a> Default for MyApp<'a> {
@@ -181,7 +185,7 @@ impl<'a> MyApp<'a> {
             egui::vec2(image_size[0] as f32, image_size[1] as f32),
         );
         let image = egui::Image::from_texture(sized_image);
-        self.current_image = Some(image);
+        self.current_image = Some((image, raw_image));
     }
 }
 
@@ -296,8 +300,15 @@ impl<'a> eframe::App for MyApp<'a> {
             //    .show_inside();
 
             egui::CentralPanel::default().show(ctx, |ui| match &self.current_image {
-                Some(image) => {
-                    ui.add_sized(ui.available_size(), image.clone());
+                Some((image, raw_image)) => {
+                    ui.add_sized(image.size().unwrap(), image.clone());
+
+                    ui.separator();
+
+                    if ui.button("Save out.png").clicked() {
+                        let image = raw_image.convert_to_image(&ToneMappingMethod::Reinhard);
+                        let _ = image.save("out.png");
+                    }
                 }
                 None => {}
             });
