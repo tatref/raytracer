@@ -9,6 +9,38 @@ use itertools::{Itertools, iproduct};
 use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 
+pub fn annotate(raw_image: &mut RawImage, world: &World, p: DVec2) {
+    for i in 0..(world.render_params.width / 100) {
+        for j in 0..5 {
+            let pixel = IVec2::new(i * 100, j);
+            let _ = raw_image.draw_pixel(pixel, Color::new(1., 0., 0.), Blending::Replace);
+        }
+    }
+
+    for j in 0..(world.render_params.height / 100) {
+        for i in 0..5 {
+            let pixel = IVec2::new(i, j * 100);
+            let _ = raw_image.draw_pixel(pixel, Color::new(1., 0., 0.), Blending::Replace);
+        }
+    }
+
+    //let arcs = world.compute_arc_sections(p);
+
+    //let r = 100.;
+    //for i in 0..300 {
+    //    let angle = i as f64 * 2. * PI / 300.;
+    //    for arc in &arcs {
+    //        if angle > arc.start && angle < arc.end {
+    //            // inside
+    //            let p2 = p - DVec2::from_angle(angle) * r;
+    //            let px = p2.as_ivec2();
+
+    //            raw_image.draw_pixel(px, Color::new(1., 0., 0.), Blending::Replace);
+    //        }
+    //    }
+    //}
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct Node {
     objects: Vec<Object>,
@@ -228,10 +260,10 @@ impl Aabb {
     }
 }
 
-#[derive(Clone, Copy, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct Circle {
-    center: DVec2,
-    r: f64,
+    pub center: DVec2,
+    pub r: f64,
 }
 
 impl Circle {
@@ -354,7 +386,13 @@ impl Bezier {
     }
 }
 
-#[derive(Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug)]
+pub struct ArcSection {
+    pub start: f64,
+    pub end: f64,
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct Segment {
     a: DVec2,
     b: DVec2,
@@ -379,6 +417,20 @@ impl Segment {
         let half_size = (max - min) / 2.;
 
         Aabb::new(mid, half_size)
+    }
+
+    // https://en.wikipedia.org/wiki/Circular-arc_graph
+    pub fn get_arc(&self, p: DVec2) -> ArcSection {
+        let p_a = self.a - p;
+        let p_b = self.b - p;
+
+        let angle_a = p_a.to_angle() + PI;
+        let angle_b = p_b.to_angle() + PI;
+
+        ArcSection {
+            start: angle_a,
+            end: angle_b,
+        }
     }
 
     pub fn hit(&self, ray: &Ray2d) -> Option<Hit2d> {
@@ -418,7 +470,7 @@ impl Segment {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Strip {
     strip: Vec<Segment>,
 }
@@ -458,7 +510,7 @@ impl Strip {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum Shape {
     Circle(Circle),
     Segment(Segment),
@@ -466,7 +518,7 @@ pub enum Shape {
     //Bezier(Bezier),
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Side {
     Inside,
     Outside,
@@ -524,7 +576,7 @@ impl Ray2d {
     }
 }
 
-#[derive(Clone, Copy, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub enum Material {
     Emissive {
         /// emission color
@@ -545,6 +597,7 @@ pub enum Material {
         absorption: Color,
     },
     Reflective,
+    // FIXME: 1/ior????
     Dielectric {
         ior: f64,
     },
@@ -578,10 +631,10 @@ impl Material {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Object {
-    shape: Shape,
-    mat: Material,
+    pub shape: Shape,
+    pub mat: Material,
 }
 
 impl Object {
@@ -633,6 +686,7 @@ impl Object {
     }
 }
 
+#[derive(Serialize, Deserialize, Clone)]
 pub struct RenderParams {
     pub width: i32,
     pub height: i32,
@@ -641,6 +695,7 @@ pub struct RenderParams {
     pub denoiser: Option<Denoiser>,
 }
 
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Denoiser {
     pub top: f32,
     pub mask_size: i32,
@@ -649,13 +704,14 @@ pub struct Denoiser {
 
 #[derive(Serialize, Deserialize)]
 pub struct World {
+    pub render_params: RenderParams,
     //light: Light,
-    objects: Vec<Object>,
+    pub objects: Vec<Object>,
     quadtree: Node,
 }
 
 impl World {
-    pub fn new(objects: Vec<Object>) -> Self {
+    pub fn new(objects: Vec<Object>, render_params: RenderParams) -> Self {
         let mut quadtree = Node::new(Aabb::new(
             DVec2::new(800. / 2., 600. / 2.),
             DVec2::new(800. / 2., 600. / 2.),
@@ -665,7 +721,24 @@ impl World {
             quadtree.insert(obj);
         }
 
-        Self { objects, quadtree }
+        Self {
+            objects,
+            quadtree,
+            render_params,
+        }
+    }
+
+    pub fn compute_arc_sections(&self, p: DVec2) -> Vec<ArcSection> {
+        let mut arcs = Vec::new();
+
+        for obj in &self.objects {
+            match &obj.shape {
+                Shape::Segment(segment) => arcs.push(segment.get_arc(p)),
+                _ => (),
+            }
+        }
+
+        arcs
     }
 
     pub fn compute_pixel(&self, pixel: IVec2, spp: usize, recursion_limit: usize) -> Color {
@@ -784,12 +857,12 @@ impl World {
         pixels
     }
 
-    pub fn render(&self, render_params: &RenderParams) -> RawImage {
-        let mut raw_image = RawImage::new(render_params.width, render_params.height);
+    pub fn render(&self) -> RawImage {
+        let mut raw_image = RawImage::new(self.render_params.width, self.render_params.height);
 
         // parallel v1
-        for i in 0..render_params.width {
-            let pixels = self.render_column(render_params, i);
+        for i in 0..self.render_params.width {
+            let pixels = self.render_column(&self.render_params, i);
 
             for (j, color) in pixels {
                 let pixel = IVec2::new(i, j);
@@ -805,8 +878,8 @@ impl World {
         let image = raw_image.convert_to_image(&ToneMappingMethod::Reinhard);
         image.save("raw.png").unwrap();
 
-        match render_params.denoiser {
-            Some(_) => self.denoise(render_params, raw_image),
+        match self.render_params.denoiser {
+            Some(_) => self.denoise(&self.render_params, raw_image),
             None => raw_image,
         }
     }
