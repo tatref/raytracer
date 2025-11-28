@@ -597,7 +597,6 @@ pub enum Material {
         absorption: Color,
     },
     Reflective,
-    // FIXME: 1/ior????
     Dielectric {
         ior: f64,
     },
@@ -781,7 +780,7 @@ impl World {
                 Material::Emissive { emission_color, d } => (d, emission_color),
                 Material::Dielectric { ior } => {
                     let p = hit.p + hit.n * 10000. * f64::EPSILON;
-                    let refracted_ray = ray.dir.refract(-hit.n, 1. / ior);
+                    let refracted_ray = ray.dir.refract(-hit.n, ior);
                     let r = if refracted_ray == DVec2::ZERO {
                         Ray2d::new(p, ray.dir.reflect(-hit.n))
                     } else {
@@ -831,7 +830,7 @@ impl World {
                 }
                 Material::Dielectric { ior } => {
                     let p = hit.p - hit.n * 10000. * f64::EPSILON;
-                    let refracted_ray = ray.dir.refract(hit.n, ior);
+                    let refracted_ray = ray.dir.refract(hit.n, 1. / ior);
                     let r = if refracted_ray == DVec2::ZERO {
                         Ray2d::new(p, ray.dir.reflect(hit.n))
                     } else {

@@ -1,4 +1,4 @@
-use std::clone;
+use std::{clone, f64::consts::PI};
 
 use eframe::egui::{self, CollapsingHeader, Image, TextureHandle, TextureOptions, Ui};
 use glam::DVec2;
@@ -7,6 +7,7 @@ use raytracer::{
     Color,
     img::{RawImage, ToneMappingMethod},
     librt2d::*,
+    worlds::*,
 };
 
 fn main() -> eframe::Result {
@@ -41,7 +42,16 @@ enum MaterialKind {
     Reflective,
 }
 
+#[derive(Debug, PartialEq, Eq)]
+enum WorldList {
+    CornellBox,
+    Simple,
+    Complex,
+    Sample,
+}
+
 struct MyApp<'a> {
+    load_world: WorldList,
     world: World,
     texture_handle: Option<TextureHandle>,
     current_image: Option<(Image<'a>, RawImage)>,
@@ -63,90 +73,10 @@ impl<'a> Default for MyApp<'a> {
             denoiser: None,
         };
 
-        fn cornell_box(render_params: RenderParams, _t: f64, _idx: u64) -> World {
-            let mut objects = Vec::new();
-
-            let center = DVec2::new(
-                render_params.width as f64 / 2.,
-                render_params.height as f64 / 2.,
-            );
-            let light = Object::new(
-                Shape::Circle(Circle::new(center, 5.)),
-                Material::emissive_at(50., Color::ONE * 20.),
-            );
-            objects.push(light);
-
-            let back = Object::segment(
-                DVec2::new(200., 100.),
-                DVec2::new(600., 100.),
-                Material::diffuse(Color::ONE),
-            );
-            objects.push(back);
-
-            let right = Object::segment(
-                DVec2::new(600., 100.),
-                DVec2::new(600., 500.),
-                Material::diffuse(Color::Y),
-            );
-            objects.push(right);
-
-            let left = Object::segment(
-                DVec2::new(200., 500.),
-                DVec2::new(200., 100.),
-                Material::diffuse(Color::X),
-            );
-            objects.push(left);
-
-            let sphere = Object::new(
-                Shape::Circle(Circle::new(DVec2::new(300., 200.), 50.)),
-                Material::diffuse(Color::ONE),
-            );
-            objects.push(sphere);
-
-            let sphere = Object::new(
-                Shape::Circle(Circle::new(DVec2::new(500., 400.), 50.)),
-                Material::dieletric(0.7),
-            );
-            objects.push(sphere);
-
-            let world = World::new(objects, render_params);
-
-            world
-        }
-
-        fn simple_world(render_params: RenderParams, _t: f64, _idx: u64) -> World {
-            let mut objects = Vec::new();
-
-            let center = DVec2::new(400., 300.);
-            let light = Object::new(
-                Shape::Circle(Circle::new(center, 1.)),
-                Material::emissive_at(50., Color::ONE * 20.),
-            );
-            objects.push(light);
-
-            let center = DVec2::new(500., 250.);
-            let light = Object::new(
-                Shape::Circle(Circle::new(center, 1.)),
-                Material::emissive_at(50., Color::ONE * 20.),
-            );
-            objects.push(light);
-
-            let segment = Object::segment(
-                DVec2::new(300., 200.),
-                DVec2::new(500., 200.),
-                Material::diffuse(Color::ONE),
-            );
-            objects.push(segment);
-
-            let world = World::new(objects, render_params);
-
-            world
-        }
-
-        //let world = simple_world(render_params, 0., 0);
         let world = cornell_box(render_params, 0., 0);
 
         Self {
+            load_world: WorldList::CornellBox,
             world,
             texture_handle: None,
             current_image: None,
@@ -208,90 +138,151 @@ impl<'a> eframe::App for MyApp<'a> {
                 .resizable(true)
                 .default_width(150.0)
                 .show(ctx, |ui| {
-                    render_params_ui(ui, &mut self.world.render_params);
+                    egui::ScrollArea::vertical().show(ui, |ui| {
+                        ui.heading("Load World");
+                        egui::ComboBox::from_label("Load world")
+                            .selected_text(format!("{:?}", self.load_world))
+                            .show_ui(ui, |ui| {
+                                ui.selectable_value(
+                                    &mut self.load_world,
+                                    WorldList::CornellBox,
+                                    "Cornell Box",
+                                );
+                                ui.selectable_value(
+                                    &mut self.load_world,
+                                    WorldList::Complex,
+                                    "Complex",
+                                );
+                                ui.selectable_value(
+                                    &mut self.load_world,
+                                    WorldList::Sample,
+                                    "Sample",
+                                );
+                                ui.selectable_value(
+                                    &mut self.load_world,
+                                    WorldList::Simple,
+                                    "Simple",
+                                );
+                            });
 
-                    if ui.button("Render").clicked() {
-                        self.render(ctx);
-                    }
-
-                    ui.separator();
-
-                    ui.heading("Objects");
-
-                    for (idx, obj) in &mut self.world.objects.iter_mut().enumerate() {
-                        match &mut obj.shape {
-                            Shape::Circle(circle) => {
-                                CollapsingHeader::new("Circle")
-                                    .id_salt(idx)
-                                    .default_open(false)
-                                    .show(ui, |ui| {
-                                        ui.horizontal(|ui| {
-                                            ui.label("r");
-                                            ui.add(egui::DragValue::new(&mut circle.r).speed(1.0));
-                                        });
-                                        ui.horizontal(|ui| {
-                                            ui.label("x");
-                                            ui.add(
-                                                egui::DragValue::new(&mut circle.center.x)
-                                                    .speed(1.0),
-                                            );
-                                            ui.label("y");
-                                            ui.add(
-                                                egui::DragValue::new(&mut circle.center.y)
-                                                    .speed(1.0),
-                                            );
-                                        });
-                                    });
-                            }
-                            Shape::Segment(segment) => {
-                                ui.label("segment");
-                            }
-                            _ => unimplemented!(),
+                        if ui.button("Load").clicked() {
+                            self.world = match self.load_world {
+                                WorldList::CornellBox => {
+                                    cornell_box(self.world.render_params.clone(), 0., 0)
+                                }
+                                WorldList::Simple => {
+                                    simple_world(self.world.render_params.clone(), 0., 0)
+                                }
+                                WorldList::Complex => {
+                                    complex_world(self.world.render_params.clone(), 0., 0)
+                                }
+                                WorldList::Sample => {
+                                    sample_world(self.world.render_params.clone(), 0., 0)
+                                }
+                            };
                         }
 
-                        match &mut obj.mat {
-                            Material::Emissive { emission_color, d } => {
-                                ui.label("Emission color");
-                                ui.horizontal(|ui| {
-                                    ui.label("r");
-                                    ui.add(egui::DragValue::new(&mut emission_color.x).speed(1));
-                                    ui.label("g");
-                                    ui.add(egui::DragValue::new(&mut emission_color.y).speed(1));
-                                    ui.label("b");
-                                    ui.add(egui::DragValue::new(&mut emission_color.z).speed(1));
-                                });
-                            }
-                            Material::Dielectric { ior } => {
-                                ui.label("ior");
-                                ui.add(egui::DragValue::new(ior).speed(0.1).range(0..=5));
-                            }
-                            Material::Diffuse { absorption } => {
-                                ui.label("Absorption color");
-                                ui.horizontal(|ui| {
-                                    ui.label("r");
-                                    ui.add(
-                                        egui::DragValue::new(&mut absorption.x)
-                                            .speed(0.1)
-                                            .range(0..=1),
-                                    );
-                                    ui.label("g");
-                                    ui.add(
-                                        egui::DragValue::new(&mut absorption.y)
-                                            .speed(0.1)
-                                            .range(0..=1),
-                                    );
-                                    ui.label("b");
-                                    ui.add(
-                                        egui::DragValue::new(&mut absorption.z)
-                                            .speed(0.1)
-                                            .range(0..=1),
-                                    );
-                                });
-                            }
-                            _ => (),
-                        }
                         ui.separator();
-                    }
+
+                        render_params_ui(ui, &mut self.world.render_params);
+
+                        if ui.button("Render").clicked() {
+                            self.render(ctx);
+                        }
+
+                        ui.separator();
+
+                        ui.heading("Objects");
+
+                        for (idx, obj) in &mut self.world.objects.iter_mut().enumerate() {
+                            match &mut obj.shape {
+                                Shape::Circle(circle) => {
+                                    CollapsingHeader::new("Circle")
+                                        .id_salt(idx)
+                                        .default_open(false)
+                                        .show(ui, |ui| {
+                                            ui.horizontal(|ui| {
+                                                ui.label("r");
+                                                ui.add(
+                                                    egui::DragValue::new(&mut circle.r).speed(1.0),
+                                                );
+                                            });
+                                            ui.horizontal(|ui| {
+                                                ui.label("x");
+                                                ui.add(
+                                                    egui::DragValue::new(&mut circle.center.x)
+                                                        .speed(1.0),
+                                                );
+                                                ui.label("y");
+                                                ui.add(
+                                                    egui::DragValue::new(&mut circle.center.y)
+                                                        .speed(1.0),
+                                                );
+                                            });
+                                        });
+                                }
+                                Shape::Segment(segment) => {
+                                    ui.label("segment");
+                                }
+                                _ => {
+                                    ui.label("unknown object");
+                                }
+                                //_ => unimplemented!(),
+                            }
+
+                            match &mut obj.mat {
+                                Material::Emissive { emission_color, d } => {
+                                    ui.label("Inner distance");
+                                    ui.add(egui::DragValue::new(d).speed(1));
+
+                                    ui.label("Emission color");
+                                    ui.horizontal(|ui| {
+                                        ui.label("r");
+                                        ui.add(
+                                            egui::DragValue::new(&mut emission_color.x).speed(1),
+                                        );
+                                        ui.label("g");
+                                        ui.add(
+                                            egui::DragValue::new(&mut emission_color.y).speed(1),
+                                        );
+                                        ui.label("b");
+                                        ui.add(
+                                            egui::DragValue::new(&mut emission_color.z).speed(1),
+                                        );
+                                    });
+                                }
+                                Material::Dielectric { ior } => {
+                                    ui.label("ior");
+                                    ui.add(egui::DragValue::new(ior).speed(0.1).range(0..=5));
+                                }
+                                Material::Diffuse { absorption } => {
+                                    ui.label("Absorption color");
+                                    ui.horizontal(|ui| {
+                                        ui.label("r");
+                                        ui.add(
+                                            egui::DragValue::new(&mut absorption.x)
+                                                .speed(0.1)
+                                                .range(0..=1),
+                                        );
+                                        ui.label("g");
+                                        ui.add(
+                                            egui::DragValue::new(&mut absorption.y)
+                                                .speed(0.1)
+                                                .range(0..=1),
+                                        );
+                                        ui.label("b");
+                                        ui.add(
+                                            egui::DragValue::new(&mut absorption.z)
+                                                .speed(0.1)
+                                                .range(0..=1),
+                                        );
+                                    });
+                                }
+                                _ => (),
+                            }
+                            ui.separator();
+                        }
+                    })
                 });
 
             //egui::SidePanel::right("right panel")
