@@ -19,3 +19,5 @@ itertools = "0.14.0"
 rand_chacha = "0.9.0"
 eframe = "0.33.2"
 egui_extras = { version = "0.33.2", features = ["all_loaders"] }
+palette = "0.7.6"
+egui_plot = "0.34.0"

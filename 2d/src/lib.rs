@@ -7,6 +7,8 @@ pub mod img;
 pub mod librt2d;
 pub mod worlds;
 
+pub mod spectrum;
+
 mod noise_loop {
     use std::f64::consts::PI;
 

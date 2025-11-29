@@ -604,9 +604,9 @@ pub enum Material {
 
 impl Material {
     pub fn emissive_at(d: f64, color: Color) -> Self {
-        let k = d as f32 * color;
+        let color_at_surface = d as f32 * color;
         Material::Emissive {
-            emission_color: k,
+            emission_color: color_at_surface,
             d,
         }
     }

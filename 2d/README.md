@@ -1,4 +1,15 @@
 
+# Notes
+
+Path tracing in production
+https://jo.dreggn.org/path-tracing-in-production/2017/talk-jo/
+
+Ray Tracing in One Weekend
+https://raytracing.github.io/
+
+
+# ffmpeg commands
+
 ```
 rm -rf out/*.png
 cargo r --release --bin 2d
