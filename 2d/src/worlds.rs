@@ -114,23 +114,8 @@ pub fn complex_world(render_params: RenderParams, _t: f64, _idx: u64) -> World {
     world
 }
 
-pub fn sample_world(render_params: RenderParams, t: f64, idx: u64) -> World {
+pub fn sample_world(render_params: RenderParams, t: f64, _idx: u64) -> World {
     let mut objects = Vec::new();
-
-    use rand::RngCore;
-    use rand::prelude::*;
-    use rand_chacha::ChaCha20Rng;
-
-    let mut rng = ChaCha20Rng::seed_from_u64(2);
-
-    //for _ in 0..50 {
-    //    let center = rand::random::<DVec2>() * DVec2::new(300., 200.) + DVec2::new(200., 300.);
-    //    let light = Object::new(
-    //        Shape::Circle(Circle::new(center, 1.)),
-    //        Material::emissive_at(50., Color::ONE * 10.),
-    //    );
-    //    objects.push(light);
-    //}
 
     let light = Object::new(
         Shape::Circle(Circle::new(DVec2::new(600., 400.), 20.)),

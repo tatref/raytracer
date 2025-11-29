@@ -14,17 +14,63 @@ pub enum Blending {
     Replace,
 }
 
-type Color = Vec3;
+#[derive(Copy, Clone)]
+pub struct PixelData {
+    pub weight: f32,
+    pub value: Vec3,
+}
+
+impl Default for PixelData {
+    fn default() -> Self {
+        PixelData {
+            weight: 1.,
+            value: Vec3::ZERO,
+        }
+    }
+}
+
+use std::ops::{Add, AddAssign, Div, Mul};
+impl Add for PixelData {
+    type Output = PixelData;
+    fn add(self, rhs: Self) -> Self::Output {
+        let mut pixel_data = PixelData::default();
+        pixel_data.weight = self.weight + rhs.weight;
+        pixel_data.value = self.value + rhs.value;
+        pixel_data
+    }
+}
+impl AddAssign for PixelData {
+    fn add_assign(&mut self, rhs: Self) {
+        self.weight += rhs.weight;
+        self.value += rhs.value;
+    }
+}
+impl Mul<f32> for PixelData {
+    type Output = PixelData;
+    fn mul(self, rhs: f32) -> Self::Output {
+        let mut pixel_data = PixelData::default();
+        pixel_data.value = self.value * rhs;
+        pixel_data
+    }
+}
+impl Div<f32> for PixelData {
+    type Output = PixelData;
+    fn div(self, rhs: f32) -> Self::Output {
+        let mut pixel_data = PixelData::default();
+        pixel_data.value = self.value / rhs;
+        pixel_data
+    }
+}
 
 #[derive(Clone)]
 pub struct RawImage {
     pub width: i32,
     pub height: i32,
-    pub data: Vec<f32>,
+    pub data: Vec<PixelData>,
 }
 impl RawImage {
     pub fn new(width: i32, height: i32) -> Self {
-        let data = vec![0f32; width as usize * height as usize * 3];
+        let data = vec![PixelData::default(); width as usize * height as usize];
         Self {
             width,
             height,
@@ -37,7 +83,7 @@ impl RawImage {
             return Err(());
         }
 
-        Ok((self.width * pixel.y + pixel.x) as usize * 3)
+        Ok((self.width * pixel.y + pixel.x) as usize)
     }
 
     pub fn idx_to_pixel(&self, idx: usize) -> Result<IVec2, ()> {
@@ -45,15 +91,15 @@ impl RawImage {
             return Err(());
         }
 
-        let pixel_index = idx / 3;
+        let pixel_index = idx;
         let y = pixel_index as i32 / self.width;
         let x = pixel_index as i32 % self.width;
         Ok(IVec2::new(x, y))
     }
 
-    pub fn get(&self, pixel: IVec2) -> Result<Color, ()> {
+    pub fn get(&self, pixel: IVec2) -> Result<PixelData, ()> {
         let idx = self.pixel_to_idx(pixel)?;
-        Ok(Color::from_slice(&self.data[idx..(idx + 3)]))
+        Ok(self.data[idx])
     }
 
     pub fn draw_pixel(&mut self, pixel: IVec2, color: Vec3, blending: Blending) -> Result<(), ()> {
@@ -61,21 +107,19 @@ impl RawImage {
 
         match blending {
             Blending::Add => {
-                self.data[idx + 0] += color.x;
-                self.data[idx + 1] += color.y;
-                self.data[idx + 2] += color.z;
+                self.data[idx + 0].value += color.x;
+                self.data[idx + 1].value += color.y;
+                self.data[idx + 2].value += color.z;
             }
             Blending::Replace => {
-                self.data[idx + 0] = color.x;
-                self.data[idx + 1] = color.y;
-                self.data[idx + 2] = color.z;
+                self.data[idx + 0].value = color;
             }
         }
 
         Ok(())
     }
 
-    pub fn map<T: Fn(f32) -> f32>(&mut self, f: T) -> RawImage {
+    pub fn map<T: Fn(PixelData) -> PixelData>(&mut self, f: T) -> RawImage {
         let mut image = RawImage::new(self.width, self.height);
 
         for (src, dst) in self.data.iter().zip(image.data.iter_mut()) {
@@ -85,20 +129,11 @@ impl RawImage {
         image
     }
 
-    pub fn map_pixel<T: Fn(Vec3) -> Vec3>(&mut self, f: T) -> RawImage {
+    pub fn map_pixel<T: Fn(PixelData) -> PixelData>(&mut self, f: T) -> RawImage {
         let mut image = RawImage::new(self.width, self.height);
 
-        for (src, dst) in self
-            .data
-            .chunks_exact(3)
-            .zip(image.data.chunks_exact_mut(3))
-        {
-            let p = Vec3::from_slice(src);
-            let new_p = f(p);
-
-            dst[0] = new_p.x;
-            dst[1] = new_p.y;
-            dst[2] = new_p.z;
+        for (src, dst) in self.data.iter().zip(image.data.iter_mut()) {
+            *dst = f(*src);
         }
 
         image
@@ -108,15 +143,16 @@ impl RawImage {
         let mut image = RawImage::new(self.width, self.height);
 
         for (x, y) in (0..(self.width - N as i32)).cartesian_product(0..(self.height - N as i32)) {
-            let mut color = Color::ZERO;
+            let mut color = PixelData::default();
 
             for (i, j) in (0..(kernel.len() as i32)).cartesian_product(0..(kernel.len() as i32)) {
                 let pixel = IVec2::new(x + i, y + j);
-                color += self.get(pixel).unwrap_or(Color::ZERO) * kernel[i as usize][j as usize];
+                color += self.get(pixel).unwrap_or(PixelData::default())
+                    * kernel[i as usize][j as usize];
             }
 
             image
-                .draw_pixel(IVec2::new(x, y), color, Blending::Replace)
+                .draw_pixel(IVec2::new(x, y), color.value, Blending::Replace)
                 .unwrap();
         }
 
@@ -134,19 +170,19 @@ impl RawImage {
             v / (1. + v)
         }
 
-        let max = self.data.iter().cloned().reduce(f32::max).unwrap();
+        //let max = self.data.iter().cloned().reduce(f32::max).unwrap();
+        let max = 0.;
 
-        for (dst, src) in img.pixels_mut().zip(self.data.chunks_exact(3)) {
+        for (dst, src) in img.pixels_mut().zip(self.data.iter()) {
             match *tone_mapping_method {
                 ToneMappingMethod::Gamma { gamma } => {
-                    dst[0] = ((src[0] / max).powf(gamma) * 255.) as u8;
-                    dst[1] = ((src[1] / max).powf(gamma) * 255.) as u8;
-                    dst[2] = ((src[2] / max).powf(gamma) * 255.) as u8;
+                    //dst = ((src / max).powf(gamma) * 255.) as u8;
+                    unimplemented!();
                 }
                 ToneMappingMethod::Reinhard => {
-                    dst[0] = (tone_mapping_reinhard(src[0]) * 255.) as u8;
-                    dst[1] = (tone_mapping_reinhard(src[1]) * 255.) as u8;
-                    dst[2] = (tone_mapping_reinhard(src[2]) * 255.) as u8;
+                    dst[0] = (tone_mapping_reinhard(src.value.x) * 255.) as u8;
+                    dst[1] = (tone_mapping_reinhard(src.value.y) * 255.) as u8;
+                    dst[2] = (tone_mapping_reinhard(src.value.z) * 255.) as u8;
                 }
             }
 

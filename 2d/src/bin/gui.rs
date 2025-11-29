@@ -1,10 +1,9 @@
-use std::{clone, f64::consts::PI};
+#![allow(dead_code)]
+#![allow(unused)]
 
 use eframe::egui::{self, CollapsingHeader, Image, TextureHandle, TextureOptions, Ui};
-use glam::DVec2;
-use image::{EncodableLayout, ImageBuffer, Rgba};
+use image::EncodableLayout;
 use raytracer::{
-    Color,
     img::{RawImage, ToneMappingMethod},
     librt2d::*,
     worlds::*,
@@ -226,8 +225,7 @@ impl<'a> eframe::App for MyApp<'a> {
                                 }
                                 _ => {
                                     ui.label("unknown object");
-                                }
-                                //_ => unimplemented!(),
+                                } //_ => unimplemented!(),
                             }
 
                             match &mut obj.mat {

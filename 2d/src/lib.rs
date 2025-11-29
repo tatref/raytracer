@@ -1,3 +1,6 @@
+#![allow(dead_code)]
+#![allow(unused)]
+
 use glam::Vec3;
 
 pub type Color = Vec3;
@@ -14,14 +17,14 @@ mod noise_loop {
 
     use glam::DVec2;
     use noise_functions::{CellDistance, Noise, NoiseFn, OpenSimplex2s, OpenSimplexNoise, Perlin};
-    struct NoiseLoop {
+    pub struct NoiseLoop {
         center: DVec2,
         r: f64,
         zoom: f64,
         scale: f64,
     }
     impl NoiseLoop {
-        fn new(center: DVec2, r: f64, zoom: f64, scale: f64) -> Self {
+        pub fn new(center: DVec2, r: f64, zoom: f64, scale: f64) -> Self {
             Self {
                 center,
                 r,
@@ -30,7 +33,7 @@ mod noise_loop {
             }
         }
         /// t: [0, 1]
-        fn at(&self, t: f64, z: f64) -> f64 {
+        pub fn at(&self, t: f64, z: f64) -> f64 {
             let angle = 2. * PI * t;
             let p = self.center + DVec2::from_angle(angle) * self.r;
             let p = p.extend(z) * self.zoom;

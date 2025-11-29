@@ -1,11 +1,14 @@
-use std::{collections::HashSet, f64::consts::PI};
+#![allow(dead_code)]
+#![allow(unused)]
+
+use std::f64::consts::PI;
 
 use crate::{
     Color,
     img::{Blending, RawImage, ToneMappingMethod},
 };
 use glam::{DVec2, IVec2, Vec3};
-use itertools::{Itertools, iproduct};
+use itertools::Itertools;
 use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 
@@ -878,73 +881,73 @@ impl World {
         image.save("raw.png").unwrap();
 
         match self.render_params.denoiser {
-            Some(_) => self.denoise(&self.render_params, raw_image),
+            Some(_) => unimplemented!(), /*self.denoise(&self.render_params, raw_image)*/
             None => raw_image,
         }
     }
 
-    fn denoise(&self, render_params: &RenderParams, mut raw_image: RawImage) -> RawImage {
-        let denoiser = render_params.denoiser.as_ref().unwrap();
+    //fn denoise(&self, render_params: &RenderParams, mut raw_image: RawImage) -> RawImage {
+    //    let denoiser = render_params.denoiser.as_ref().unwrap();
 
-        let laplace_kernel = [[-1., -1., -1.], [-1., 8., -1.], [-1., -1., -1.]];
-        let laplace_image = raw_image
-            .convolution(laplace_kernel)
-            .map_pixel(|p| Vec3::splat(p.length()));
-        laplace_image
-            .convert_to_image(&ToneMappingMethod::Reinhard)
-            .save("laplace.png")
-            .unwrap();
+    //    let laplace_kernel = [[-1., -1., -1.], [-1., 8., -1.], [-1., -1., -1.]];
+    //    let laplace_image = raw_image
+    //        .convolution(laplace_kernel)
+    //        .map_pixel(|p| Vec3::splat(p.length()));
+    //    laplace_image
+    //        .convert_to_image(&ToneMappingMethod::Reinhard)
+    //        .save("laplace.png")
+    //        .unwrap();
 
-        let mut sorted_pixels: Vec<(usize, &f32)> = laplace_image.data.iter().enumerate().collect();
-        sorted_pixels.sort_by(|a, b| a.1.total_cmp(&b.1));
-        sorted_pixels.reverse();
+    //    let mut sorted_pixels: Vec<(usize, &f32)> = laplace_image.data.iter().enumerate().collect();
+    //    sorted_pixels.sort_by(|a, b| a.1.total_cmp(&b.1));
+    //    sorted_pixels.reverse();
 
-        let total_pixels = render_params.width * render_params.height * 3;
-        let top = (total_pixels as f32 * denoiser.top) as usize;
-        let recompute_indexes: Vec<usize> = sorted_pixels[0..top]
-            .iter()
-            .map(|(idx, _val)| *idx)
-            .collect();
+    //    let total_pixels = render_params.width * render_params.height * 3;
+    //    let top = (total_pixels as f32 * denoiser.top) as usize;
+    //    let recompute_indexes: Vec<usize> = sorted_pixels[0..top]
+    //        .iter()
+    //        .map(|(idx, _val)| *idx)
+    //        .collect();
 
-        let mut recompute_mask = raw_image.clone();
-        let recompute_pixels: HashSet<IVec2> = recompute_indexes
-            .iter()
-            .map(|idx| {
-                let mut pixels = Vec::new();
-                let pixel = recompute_mask.idx_to_pixel(*idx).unwrap();
-                let mask_size = denoiser.mask_size;
-                for (i, j) in iproduct!(-mask_size..=mask_size, -mask_size..=mask_size) {
-                    pixels.push(pixel + IVec2::new(i, j));
-                }
+    //    let mut recompute_mask = raw_image.clone();
+    //    let recompute_pixels: HashSet<IVec2> = recompute_indexes
+    //        .iter()
+    //        .map(|idx| {
+    //            let mut pixels = Vec::new();
+    //            let pixel = recompute_mask.idx_to_pixel(*idx).unwrap();
+    //            let mask_size = denoiser.mask_size;
+    //            for (i, j) in iproduct!(-mask_size..=mask_size, -mask_size..=mask_size) {
+    //                pixels.push(pixel + IVec2::new(i, j));
+    //            }
 
-                pixels
-            })
-            .flatten()
-            .collect();
+    //            pixels
+    //        })
+    //        .flatten()
+    //        .collect();
 
-        for pixel in recompute_pixels.iter() {
-            let _ = recompute_mask.draw_pixel(*pixel, Color::new(1., 0., 1.), Blending::Replace);
-        }
-        recompute_mask
-            .convert_to_image(&ToneMappingMethod::Reinhard)
-            .save("mask.png")
-            .unwrap();
+    //    for pixel in recompute_pixels.iter() {
+    //        let _ = recompute_mask.draw_pixel(*pixel, Color::new(1., 0., 1.), Blending::Replace);
+    //    }
+    //    recompute_mask
+    //        .convert_to_image(&ToneMappingMethod::Reinhard)
+    //        .save("mask.png")
+    //        .unwrap();
 
-        let xxx: Vec<_> = recompute_pixels
-            .par_iter()
-            .map(|&pixel| {
-                let color = self.compute_pixel(
-                    pixel,
-                    (render_params.spp as f32 * denoiser.oversample_factor) as usize,
-                    render_params.recursion_limit,
-                );
-                (pixel, color)
-            })
-            .collect();
-        for (pixel, color) in xxx {
-            let _ = raw_image.draw_pixel(pixel, color, Blending::Replace);
-        }
+    //    let xxx: Vec<_> = recompute_pixels
+    //        .par_iter()
+    //        .map(|&pixel| {
+    //            let color = self.compute_pixel(
+    //                pixel,
+    //                (render_params.spp as f32 * denoiser.oversample_factor) as usize,
+    //                render_params.recursion_limit,
+    //            );
+    //            (pixel, color)
+    //        })
+    //        .collect();
+    //    for (pixel, color) in xxx {
+    //        let _ = raw_image.draw_pixel(pixel, color, Blending::Replace);
+    //    }
 
-        raw_image
-    }
+    //    raw_image
+    //}
 }
