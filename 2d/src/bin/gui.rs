@@ -47,6 +47,7 @@ enum WorldList {
     Simple,
     Complex,
     Sample,
+    Colors,
 }
 
 struct MyApp<'a> {
@@ -72,10 +73,10 @@ impl<'a> Default for MyApp<'a> {
             denoiser: None,
         };
 
-        let world = cornell_box(render_params, 0., 0);
+        let world = colors_world(render_params, 0., 0);
 
         Self {
-            load_world: WorldList::CornellBox,
+            load_world: WorldList::Colors,
             world,
             texture_handle: None,
             current_image: None,
@@ -162,10 +163,18 @@ impl<'a> eframe::App for MyApp<'a> {
                                     WorldList::Simple,
                                     "Simple",
                                 );
+                                ui.selectable_value(
+                                    &mut self.load_world,
+                                    WorldList::Colors,
+                                    "Colors",
+                                );
                             });
 
                         if ui.button("Load").clicked() {
                             self.world = match self.load_world {
+                                WorldList::Colors => {
+                                    colors_world(self.world.render_params.clone(), 0., 0)
+                                }
                                 WorldList::CornellBox => {
                                     cornell_box(self.world.render_params.clone(), 0., 0)
                                 }
@@ -229,52 +238,61 @@ impl<'a> eframe::App for MyApp<'a> {
                             }
 
                             match &mut obj.mat {
-                                Material::Emissive { emission_color, d } => {
+                                Material::Emissive {
+                                    emission: emission_color,
+                                    d,
+                                } => {
                                     ui.label("Inner distance");
                                     ui.add(egui::DragValue::new(d).speed(1));
 
                                     ui.label("Emission color");
-                                    ui.horizontal(|ui| {
-                                        ui.label("r");
-                                        ui.add(
-                                            egui::DragValue::new(&mut emission_color.x).speed(1),
-                                        );
-                                        ui.label("g");
-                                        ui.add(
-                                            egui::DragValue::new(&mut emission_color.y).speed(1),
-                                        );
-                                        ui.label("b");
-                                        ui.add(
-                                            egui::DragValue::new(&mut emission_color.z).speed(1),
-                                        );
-                                    });
+                                    //ui.horizontal(|ui| {
+                                    //    ui.label("r");
+                                    //    ui.add(
+                                    //        egui::DragValue::new(&mut emission_color.x).speed(1),
+                                    //    );
+                                    //    ui.label("g");
+                                    //    ui.add(
+                                    //        egui::DragValue::new(&mut emission_color.y).speed(1),
+                                    //    );
+                                    //    ui.label("b");
+                                    //    ui.add(
+                                    //        egui::DragValue::new(&mut emission_color.z).speed(1),
+                                    //    );
+                                    //});
                                 }
                                 Material::Dielectric { ior } => {
                                     ui.label("ior");
-                                    ui.add(egui::DragValue::new(ior).speed(0.1).range(0..=5));
+                                    match ior {
+                                        Ior::Simple(ior) => {
+                                            ui.add(
+                                                egui::DragValue::new(ior).speed(0.1).range(0..=5),
+                                            );
+                                        }
+                                    }
                                 }
                                 Material::Diffuse { absorption } => {
                                     ui.label("Absorption color");
-                                    ui.horizontal(|ui| {
-                                        ui.label("r");
-                                        ui.add(
-                                            egui::DragValue::new(&mut absorption.x)
-                                                .speed(0.1)
-                                                .range(0..=1),
-                                        );
-                                        ui.label("g");
-                                        ui.add(
-                                            egui::DragValue::new(&mut absorption.y)
-                                                .speed(0.1)
-                                                .range(0..=1),
-                                        );
-                                        ui.label("b");
-                                        ui.add(
-                                            egui::DragValue::new(&mut absorption.z)
-                                                .speed(0.1)
-                                                .range(0..=1),
-                                        );
-                                    });
+                                    //ui.horizontal(|ui| {
+                                    //    ui.label("r");
+                                    //    ui.add(
+                                    //        egui::DragValue::new(&mut absorption.x)
+                                    //            .speed(0.1)
+                                    //            .range(0..=1),
+                                    //    );
+                                    //    ui.label("g");
+                                    //    ui.add(
+                                    //        egui::DragValue::new(&mut absorption.y)
+                                    //            .speed(0.1)
+                                    //            .range(0..=1),
+                                    //    );
+                                    //    ui.label("b");
+                                    //    ui.add(
+                                    //        egui::DragValue::new(&mut absorption.z)
+                                    //            .speed(0.1)
+                                    //            .range(0..=1),
+                                    //    );
+                                    //});
                                 }
                                 _ => (),
                             }

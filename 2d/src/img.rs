@@ -35,14 +35,16 @@ impl Add for PixelData {
     fn add(self, rhs: Self) -> Self::Output {
         let mut pixel_data = PixelData::default();
         pixel_data.weight = self.weight + rhs.weight;
-        pixel_data.value = self.value + rhs.value;
+        pixel_data.value =
+            (self.value * self.weight + rhs.value * rhs.weight) / (self.weight + rhs.weight);
         pixel_data
     }
 }
 impl AddAssign for PixelData {
     fn add_assign(&mut self, rhs: Self) {
         self.weight += rhs.weight;
-        self.value += rhs.value;
+        self.value =
+            (self.value * self.weight + rhs.value * rhs.weight) / (self.weight + rhs.weight);
     }
 }
 impl Mul<f32> for PixelData {
@@ -102,17 +104,20 @@ impl RawImage {
         Ok(self.data[idx])
     }
 
-    pub fn draw_pixel(&mut self, pixel: IVec2, color: Vec3, blending: Blending) -> Result<(), ()> {
+    pub fn draw_pixel(
+        &mut self,
+        pixel: IVec2,
+        pixel_data: PixelData,
+        blending: Blending,
+    ) -> Result<(), ()> {
         let idx = self.pixel_to_idx(pixel)?;
 
         match blending {
             Blending::Add => {
-                self.data[idx + 0].value += color.x;
-                self.data[idx + 1].value += color.y;
-                self.data[idx + 2].value += color.z;
+                self.data[idx + 0] += pixel_data;
             }
             Blending::Replace => {
-                self.data[idx + 0].value = color;
+                self.data[idx + 0] = pixel_data;
             }
         }
 
@@ -143,16 +148,16 @@ impl RawImage {
         let mut image = RawImage::new(self.width, self.height);
 
         for (x, y) in (0..(self.width - N as i32)).cartesian_product(0..(self.height - N as i32)) {
-            let mut color = PixelData::default();
+            let mut pixel_data = PixelData::default();
 
             for (i, j) in (0..(kernel.len() as i32)).cartesian_product(0..(kernel.len() as i32)) {
                 let pixel = IVec2::new(x + i, y + j);
-                color += self.get(pixel).unwrap_or(PixelData::default())
+                pixel_data += self.get(pixel).unwrap_or(PixelData::default())
                     * kernel[i as usize][j as usize];
             }
 
             image
-                .draw_pixel(IVec2::new(x, y), color.value, Blending::Replace)
+                .draw_pixel(IVec2::new(x, y), pixel_data, Blending::Replace)
                 .unwrap();
         }
 

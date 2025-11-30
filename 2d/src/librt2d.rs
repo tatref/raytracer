@@ -5,7 +5,8 @@ use std::f64::consts::PI;
 
 use crate::{
     Color,
-    img::{Blending, RawImage, ToneMappingMethod},
+    img::{Blending, PixelData, RawImage, ToneMappingMethod},
+    spectrum::Spectrum,
 };
 use glam::{DVec2, IVec2, Vec3};
 use itertools::Itertools;
@@ -13,17 +14,22 @@ use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterato
 use serde::{Deserialize, Serialize};
 
 pub fn annotate(raw_image: &mut RawImage, world: &World, p: DVec2) {
+    let pixel_data = PixelData {
+        value: Vec3::X,
+        weight: 1.,
+    };
+
     for i in 0..(world.render_params.width / 100) {
         for j in 0..5 {
             let pixel = IVec2::new(i * 100, j);
-            let _ = raw_image.draw_pixel(pixel, Color::new(1., 0., 0.), Blending::Replace);
+            let _ = raw_image.draw_pixel(pixel, pixel_data, Blending::Replace);
         }
     }
 
     for j in 0..(world.render_params.height / 100) {
         for i in 0..5 {
             let pixel = IVec2::new(i, j * 100);
-            let _ = raw_image.draw_pixel(pixel, Color::new(1., 0., 0.), Blending::Replace);
+            let _ = raw_image.draw_pixel(pixel, pixel_data, Blending::Replace);
         }
     }
 
@@ -238,27 +244,32 @@ impl Aabb {
         //    let _ = raw_image.draw_pixel(pixel, color, blend);
         //}
 
+        let pixel_data = PixelData {
+            value: color,
+            weight: 1.,
+        };
+
         // box TOP
         let h = self.half_size.x as i32;
         for i in -h..h {
             let pixel = self.center.as_ivec2() + IVec2::new(i, -self.half_size.y as i32);
-            let _ = raw_image.draw_pixel(pixel, color, blend);
+            let _ = raw_image.draw_pixel(pixel, pixel_data, blend);
         }
         // box BOTTOM
         for i in -h..h {
             let pixel = self.center.as_ivec2() + IVec2::new(i, self.half_size.y as i32);
-            let _ = raw_image.draw_pixel(pixel, color, blend);
+            let _ = raw_image.draw_pixel(pixel, pixel_data, blend);
         }
         // box LEFT
         let h = self.half_size.y as i32;
         for j in -h..h {
             let pixel = self.center.as_ivec2() + IVec2::new(self.half_size.x as i32, j);
-            let _ = raw_image.draw_pixel(pixel, color, blend);
+            let _ = raw_image.draw_pixel(pixel, pixel_data, blend);
         }
         // box RIGHT
         for j in -h..h {
             let pixel = self.center.as_ivec2() + IVec2::new(-self.half_size.x as i32, j);
-            let _ = raw_image.draw_pixel(pixel, color, blend);
+            let _ = raw_image.draw_pixel(pixel, pixel_data, blend);
         }
     }
 }
@@ -583,53 +594,65 @@ impl Ray2d {
 pub enum Material {
     Emissive {
         /// emission color
-        emission_color: Color,
+        emission: Spectrum,
         /// inner radius
         /// for better fall off
         d: f64,
     },
     DirectionalEmissive {
         /// emission color
-        emission_color: Color,
+        emission: Spectrum,
         angle: f64,
         /// inner radius
         /// for better fall off
         d: f64,
     },
     Diffuse {
-        absorption: Color,
+        absorption: Spectrum,
     },
     Reflective,
     Dielectric {
-        ior: f64,
+        ior: Ior,
     },
 }
 
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+pub enum Ior {
+    Simple(f64),
+}
+impl Ior {
+    pub fn ior(&self, lambda: u16) -> f64 {
+        match self {
+            Ior::Simple(ior) => *ior,
+        }
+    }
+}
+
 impl Material {
-    pub fn emissive_at(d: f64, color: Color) -> Self {
-        let color_at_surface = d as f32 * color;
+    pub fn emissive_at(d: f64, spectrum: Spectrum) -> Self {
+        let color_at_surface = spectrum * d as f32;
         Material::Emissive {
-            emission_color: color_at_surface,
+            emission: color_at_surface,
             d,
         }
     }
-    pub fn directional_emissive_at(d: f64, angle: f64, color: Color) -> Self {
-        let k = d as f32 * color;
+    pub fn directional_emissive_at(d: f64, angle: f64, emission: Spectrum) -> Self {
+        let k = emission * d as f32;
         Material::DirectionalEmissive {
-            emission_color: k,
+            emission: k,
             d,
             angle,
         }
     }
 
-    pub fn diffuse(color: Color) -> Self {
-        Material::Diffuse {
-            absorption: color.clamp(Color::ZERO, Color::ONE),
-        }
+    pub fn diffuse(absorption: Spectrum) -> Self {
+        Material::Diffuse { absorption }
     }
 
     pub fn dieletric(ior: f64) -> Self {
-        Material::Dielectric { ior }
+        Material::Dielectric {
+            ior: Ior::Simple(ior),
+        }
     }
 }
 
@@ -743,22 +766,22 @@ impl World {
         arcs
     }
 
-    pub fn compute_pixel(&self, pixel: IVec2, spp: usize, recursion_limit: usize) -> Color {
-        let mut color = Color::ZERO;
+    pub fn compute_pixel(&self, pixel: IVec2, spp: usize, recursion_limit: usize) -> Spectrum {
+        let mut total_spectrum = Spectrum::default();
 
         for _ in 0..spp {
             let p = pixel.as_dvec2() + rand::random::<DVec2>() - DVec2::ONE / 2.;
             let ray = Ray2d::rand(p);
 
-            let (_t, col) = self.trace_ray(&ray, recursion_limit);
-            color += col;
+            let (_t, spectrum) = self.trace_ray(&ray, recursion_limit);
+            total_spectrum += spectrum;
         }
-        color / spp as f32
+        total_spectrum / spp as f32
     }
 
-    pub fn trace_ray(&self, ray: &Ray2d, depth: usize) -> (f64, Color) {
+    pub fn trace_ray(&self, ray: &Ray2d, depth: usize) -> (f64, Spectrum) {
         if depth == 0 {
-            return (0., Color::ZERO);
+            return (0., Spectrum::default());
         }
 
         // Vec version
@@ -769,7 +792,7 @@ impl World {
             .collect();
         hits.sort_by(|(_, a), (_, b)| a.t.total_cmp(&b.t));
         let Some((obj, hit)) = hits.first() else {
-            return (0., Color::ZERO);
+            return (0., Spectrum::default());
         };
 
         // Quadtree version
@@ -780,8 +803,9 @@ impl World {
 
         if hit.side == Side::Inside {
             match obj.mat {
-                Material::Emissive { emission_color, d } => (d, emission_color),
+                Material::Emissive { emission, d } => (d, emission),
                 Material::Dielectric { ior } => {
+                    let ior = ior.ior(0);
                     let p = hit.p + hit.n * 10000. * f64::EPSILON;
                     let refracted_ray = ray.dir.refract(-hit.n, ior);
                     let r = if refracted_ray == DVec2::ZERO {
@@ -793,7 +817,7 @@ impl World {
 
                     (hit.t + d2, col)
                 }
-                _ => (0., Color::ZERO),
+                _ => (0., Spectrum::default()),
             }
         } else {
             // outside
@@ -803,16 +827,19 @@ impl World {
                     let p = hit.p + hit.n * 10000. * f64::EPSILON;
                     let r = Ray2d::rand_hemisphere(p, hit.n);
 
-                    let (d2, col) = self.trace_ray(&r, depth - 1);
+                    let (d2, light) = self.trace_ray(&r, depth - 1);
 
-                    (hit.t + d2, absorption * col)
+                    (hit.t + d2, absorption * light)
                 }
-                Material::Emissive { emission_color, d } => {
+                Material::Emissive {
+                    emission: emission_color,
+                    d,
+                } => {
                     let distance_coeff = 1. / (hit.t + d);
                     (hit.t + d, emission_color * distance_coeff as f32)
                 }
                 Material::DirectionalEmissive {
-                    emission_color,
+                    emission: emission_color,
                     angle,
                     d,
                 } => {
@@ -820,7 +847,7 @@ impl World {
                         let distance_coeff = 1. / (hit.t + d);
                         (hit.t + d, emission_color * distance_coeff as f32)
                     } else {
-                        (0., Color::ZERO)
+                        (0., Spectrum::default())
                     }
                 }
                 Material::Reflective => {
@@ -832,6 +859,7 @@ impl World {
                     (hit.t + t, col)
                 }
                 Material::Dielectric { ior } => {
+                    let ior = ior.ior(0);
                     let p = hit.p - hit.n * 10000. * f64::EPSILON;
                     let refracted_ray = ray.dir.refract(hit.n, 1. / ior);
                     let r = if refracted_ray == DVec2::ZERO {
@@ -846,14 +874,18 @@ impl World {
         }
     }
 
-    pub fn render_column(&self, render_params: &RenderParams, i: i32) -> Vec<(i32, Color)> {
-        let pixels: Vec<(i32, Color)> = (0..render_params.height)
+    pub fn render_column(
+        &self,
+        render_params: &RenderParams,
+        i: i32,
+    ) -> Vec<(i32, (Spectrum, usize))> {
+        let pixels: Vec<(i32, (Spectrum, usize))> = (0..render_params.height)
             .into_par_iter()
             .map(|j| {
                 let pixel = IVec2::new(i, j);
-                let color =
+                let spectrum =
                     self.compute_pixel(pixel, render_params.spp, render_params.recursion_limit);
-                (j, color)
+                (j, (spectrum, render_params.spp))
             })
             .collect();
         pixels
@@ -866,10 +898,14 @@ impl World {
         for i in 0..self.render_params.width {
             let pixels = self.render_column(&self.render_params, i);
 
-            for (j, color) in pixels {
+            for (j, (spectrum, weight)) in pixels {
                 let pixel = IVec2::new(i, j);
+                let pixel_data = PixelData {
+                    value: spectrum.to_dvec3(),
+                    weight: weight as f32,
+                };
                 raw_image
-                    .draw_pixel(pixel, color, Blending::Replace)
+                    .draw_pixel(pixel, pixel_data, Blending::Replace)
                     .unwrap();
             }
         }

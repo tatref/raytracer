@@ -1,5 +1,6 @@
 use glam::Vec3;
-use palette::xyz::Xyz;
+use palette::{IntoColor, Srgb, xyz::Xyz};
+use serde::{Deserialize, Serialize};
 
 /// Data from http://www.cvrl.org/cmfs.htm, CIE 1931 2-deg, XYZ CMFs
 /// 360 nm -> 830 nm += 5nm
@@ -104,9 +105,26 @@ const SPECTRUM_TO_XYZ_MAP: [[f32; 3]; 95] = [
 pub const SPECTRUM_SAMPLES: usize = SPECTRUM_TO_XYZ_MAP.len();
 
 /// ! Spectrum from 360 nm to 830 nm, increment by 5 nm
-#[derive(Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct Spectrum {
     pub data: [f32; SPECTRUM_SAMPLES],
+}
+
+impl<'de> Deserialize<'de> for Spectrum {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        todo!()
+    }
+}
+impl Serialize for Spectrum {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        todo!()
+    }
 }
 
 impl Default for Spectrum {
@@ -193,6 +211,7 @@ impl Spectrum {
         let mut spectrum = Spectrum::default();
         spectrum.iter_lambda().for_each(|(l, power)| {
             if l >= lambda.0 && l <= lambda.1 {
+                //*power = 10. / (lambda.1 - lambda.0) as f32;
                 *power = 1.;
             }
         });
@@ -215,21 +234,31 @@ impl Spectrum {
     }
 
     pub fn to_dvec3(&self) -> Vec3 {
-        let mut x = 0.;
-        let mut y = 0.;
-        let mut z = 0.;
+        fn to_srgb(spectrum: &Spectrum) -> Srgb<f32> {
+            let xyz = spectrum.to_xyz();
+            let srgb: Srgb = xyz.into_color();
+            //let srgb: Srgb<u8> = srgb.into_format();
 
-        for (intensity, map) in self.data.iter().zip(SPECTRUM_TO_XYZ_MAP.iter()) {
-            x = x + *intensity * map[0];
-            y = y + *intensity * map[1];
-            z = z + *intensity * map[2];
+            srgb
         }
 
-        Vec3::new(x, y, z)
+        //let mut x = 0.;
+        //let mut y = 0.;
+        //let mut z = 0.;
+
+        //for (intensity, map) in self.data.iter().zip(SPECTRUM_TO_XYZ_MAP.iter()) {
+        //    x = x + *intensity * map[0];
+        //    y = y + *intensity * map[1];
+        //    z = z + *intensity * map[2];
+        //}
+
+        let srgb = to_srgb(self);
+
+        Vec3::new(srgb.red, srgb.green, srgb.blue)
     }
 }
 
-use std::ops::{Add, Div, DivAssign, Mul, MulAssign};
+use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub};
 impl Add for Spectrum {
     type Output = Spectrum;
     fn add(self, rhs: Self) -> Self::Output {
@@ -245,6 +274,28 @@ impl Add for Spectrum {
         spectrum
     }
 }
+impl Sub for Spectrum {
+    type Output = Spectrum;
+    fn sub(self, rhs: Self) -> Self::Output {
+        let mut spectrum = Spectrum::default();
+        for ((dest, a), b) in spectrum
+            .data
+            .iter_mut()
+            .zip(self.data.iter())
+            .zip(rhs.data.iter())
+        {
+            *dest = a - b;
+        }
+        spectrum
+    }
+}
+impl AddAssign for Spectrum {
+    fn add_assign(&mut self, rhs: Self) {
+        for (dest, a) in self.data.iter_mut().zip(rhs.data.iter()) {
+            *dest += a;
+        }
+    }
+}
 
 impl Mul<f32> for Spectrum {
     type Output = Spectrum;
@@ -252,6 +303,22 @@ impl Mul<f32> for Spectrum {
         let mut spectrum = Spectrum::default();
         for (dest, a) in spectrum.data.iter_mut().zip(self.data.iter()) {
             *dest = a * rhs;
+        }
+        spectrum
+    }
+}
+
+impl Mul<Spectrum> for Spectrum {
+    type Output = Spectrum;
+    fn mul(self, rhs: Spectrum) -> Self::Output {
+        let mut spectrum = Spectrum::default();
+        for ((dest, a), b) in spectrum
+            .data
+            .iter_mut()
+            .zip(self.data.iter())
+            .zip(rhs.data.iter())
+        {
+            *dest = a * b;
         }
         spectrum
     }

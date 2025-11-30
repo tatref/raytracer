@@ -32,7 +32,7 @@ fn full_spectrum() {
         for (idx_b, color_b) in SpectrumColor::iter_colors().iter().enumerate() {
             let spectrum_b = Spectrum::color(*color_b);
 
-            let spectrum = (spectrum_a.clone() + spectrum_b) / 4.;
+            let spectrum = (spectrum_a.clone() + spectrum_b) * 100.;
             let srgb = to_srgb(&spectrum);
 
             for i in 0..cell_size {
