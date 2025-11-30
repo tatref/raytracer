@@ -103,6 +103,8 @@ const SPECTRUM_TO_XYZ_MAP: [[f32; 3]; 95] = [
 ];
 
 pub const SPECTRUM_SAMPLES: usize = SPECTRUM_TO_XYZ_MAP.len();
+pub const SPECTRUM_LAMBDA_MIN: u16 = 360;
+pub const SPECTRUM_LAMBDA_MAX: u16 = 830;
 
 /// ! Spectrum from 360 nm to 830 nm, increment by 5 nm
 #[derive(Copy, Clone, Debug)]

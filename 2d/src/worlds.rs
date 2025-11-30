@@ -18,7 +18,7 @@ pub fn cornell_box(render_params: RenderParams, _t: f64, _idx: u64) -> World {
     );
     let light = Object::new(
         Shape::Circle(Circle::new(center, 5.)),
-        Material::emissive_at(50., Spectrum::color(SpectrumColor::White) * 1.),
+        Material::emissive(Spectrum::color(SpectrumColor::White) * 5.),
     );
     objects.push(light);
 
@@ -83,7 +83,7 @@ pub fn simple_world(render_params: RenderParams, _t: f64, _idx: u64) -> World {
     let center = DVec2::new(400., 300.);
     let light = Object::new(
         Shape::Circle(Circle::new(center, 1.)),
-        Material::emissive_at(10., Spectrum::color(SpectrumColor::White) * 10.),
+        Material::emissive(Spectrum::color(SpectrumColor::White) * 10.),
     );
     objects.push(light);
 
@@ -118,7 +118,7 @@ pub fn colors_world(render_params: RenderParams, _t: f64, _idx: u64) -> World {
         let center = DVec2::new(100. + idx as f64 * spacing, 150.);
         let light = Object::new(
             Shape::Circle(Circle::new(center, 10.)),
-            Material::emissive_at(10., spectrum * 5.),
+            Material::emissive(spectrum * 5.),
         );
         objects.push(light);
 
@@ -126,7 +126,7 @@ pub fn colors_world(render_params: RenderParams, _t: f64, _idx: u64) -> World {
         let center = DVec2::new(100. + idx as f64 * spacing, 450.);
         let light = Object::new(
             Shape::Circle(Circle::new(center, 10.)),
-            Material::emissive_at(1., Spectrum::color(SpectrumColor::White) * 1.),
+            Material::emissive(Spectrum::color(SpectrumColor::White) * 1.),
         );
         objects.push(light);
 
@@ -156,7 +156,7 @@ pub fn complex_world(render_params: RenderParams, _t: f64, _idx: u64) -> World {
 
     let materials = [
         Material::Reflective,
-        Material::emissive_at(10., Spectrum::color(SpectrumColor::White) * 1.),
+        Material::emissive(Spectrum::color(SpectrumColor::White) * 1.),
         Material::diffuse(Spectrum::color(SpectrumColor::White)),
         Material::dieletric(1.5),
     ];
@@ -178,7 +178,7 @@ pub fn sample_world(render_params: RenderParams, t: f64, _idx: u64) -> World {
 
     let light = Object::new(
         Shape::Circle(Circle::new(DVec2::new(600., 400.), 20.)),
-        Material::emissive_at(1., Spectrum::color(SpectrumColor::White) * 1.),
+        Material::emissive(Spectrum::color(SpectrumColor::White) * 1.),
     );
     objects.push(light);
 
@@ -222,7 +222,7 @@ pub fn sample_world(render_params: RenderParams, t: f64, _idx: u64) -> World {
 
     let big_light = Object::new(
         Shape::Circle(Circle::new(DVec2::new(50. + angle.sin() * 100., 100.), 20.)),
-        Material::emissive_at(1., Spectrum::color(SpectrumColor::White) * 1.),
+        Material::emissive(Spectrum::color(SpectrumColor::White) * 1.),
     );
     objects.push(big_light);
 

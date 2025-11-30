@@ -595,9 +595,6 @@ pub enum Material {
     Emissive {
         /// emission color
         emission: Spectrum,
-        /// inner radius
-        /// for better fall off
-        d: f64,
     },
     DirectionalEmissive {
         /// emission color
@@ -629,11 +626,10 @@ impl Ior {
 }
 
 impl Material {
-    pub fn emissive_at(d: f64, spectrum: Spectrum) -> Self {
-        let color_at_surface = spectrum * d as f32;
+    pub fn emissive(spectrum: Spectrum) -> Self {
+        let color_at_surface = spectrum;
         Material::Emissive {
             emission: color_at_surface,
-            d,
         }
     }
     pub fn directional_emissive_at(d: f64, angle: f64, emission: Spectrum) -> Self {
@@ -803,8 +799,9 @@ impl World {
 
         if hit.side == Side::Inside {
             match obj.mat {
-                Material::Emissive { emission, d } => (d, emission),
+                Material::Emissive { emission } => (1., emission),
                 Material::Dielectric { ior } => {
+                    let lambda_samples = 10;
                     let ior = ior.ior(0);
                     let p = hit.p + hit.n * 10000. * f64::EPSILON;
                     let refracted_ray = ray.dir.refract(-hit.n, ior);
@@ -833,10 +830,10 @@ impl World {
                 }
                 Material::Emissive {
                     emission: emission_color,
-                    d,
                 } => {
-                    let distance_coeff = 1. / (hit.t + d);
-                    (hit.t + d, emission_color * distance_coeff as f32)
+                    let total_dist = hit.t + 1.;
+                    let distance_coeff = 1. / (total_dist);
+                    (total_dist, emission_color * distance_coeff as f32)
                 }
                 Material::DirectionalEmissive {
                     emission: emission_color,

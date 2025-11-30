@@ -240,11 +240,7 @@ impl<'a> eframe::App for MyApp<'a> {
                             match &mut obj.mat {
                                 Material::Emissive {
                                     emission: emission_color,
-                                    d,
                                 } => {
-                                    ui.label("Inner distance");
-                                    ui.add(egui::DragValue::new(d).speed(1));
-
                                     ui.label("Emission color");
                                     //ui.horizontal(|ui| {
                                     //    ui.label("r");
