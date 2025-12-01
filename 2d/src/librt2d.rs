@@ -616,11 +616,17 @@ pub enum Material {
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub enum Ior {
     Simple(f64),
+    /// https://en.wikipedia.org/wiki/Cauchy%27s_equation
+    Cauchy {
+        a: f64,
+        b: f64,
+    },
 }
 impl Ior {
-    pub fn ior(&self, lambda: u16) -> f64 {
+    pub fn ior(&self, lambda: f64) -> f64 {
         match self {
             Ior::Simple(ior) => *ior,
+            Ior::Cauchy { a, b } => *a + *b / lambda.powi(2),
         }
     }
 }
@@ -769,15 +775,15 @@ impl World {
             let p = pixel.as_dvec2() + rand::random::<DVec2>() - DVec2::ONE / 2.;
             let ray = Ray2d::rand(p);
 
-            let (_t, spectrum) = self.trace_ray(&ray, recursion_limit);
+            let spectrum = self.trace_ray(&ray, recursion_limit);
             total_spectrum += spectrum;
         }
         total_spectrum / spp as f32
     }
 
-    pub fn trace_ray(&self, ray: &Ray2d, depth: usize) -> (f64, Spectrum) {
+    pub fn trace_ray(&self, ray: &Ray2d, depth: usize) -> Spectrum {
         if depth == 0 {
-            return (0., Spectrum::default());
+            return Spectrum::default();
         }
 
         // Vec version
@@ -788,7 +794,7 @@ impl World {
             .collect();
         hits.sort_by(|(_, a), (_, b)| a.t.total_cmp(&b.t));
         let Some((obj, hit)) = hits.first() else {
-            return (0., Spectrum::default());
+            return Spectrum::default();
         };
 
         // Quadtree version
@@ -799,10 +805,10 @@ impl World {
 
         if hit.side == Side::Inside {
             match obj.mat {
-                Material::Emissive { emission } => (1., emission),
+                Material::Emissive { emission } => emission,
                 Material::Dielectric { ior } => {
                     let lambda_samples = 10;
-                    let ior = ior.ior(0);
+                    let ior = ior.ior(400.);
                     let p = hit.p + hit.n * 10000. * f64::EPSILON;
                     let refracted_ray = ray.dir.refract(-hit.n, ior);
                     let r = if refracted_ray == DVec2::ZERO {
@@ -810,11 +816,11 @@ impl World {
                     } else {
                         Ray2d::new(p, refracted_ray)
                     };
-                    let (d2, col) = self.trace_ray(&r, depth - 1);
+                    let col = self.trace_ray(&r, depth - 1);
 
-                    (hit.t + d2, col)
+                    col
                 }
-                _ => (0., Spectrum::default()),
+                _ => Spectrum::default(),
             }
         } else {
             // outside
@@ -824,16 +830,17 @@ impl World {
                     let p = hit.p + hit.n * 10000. * f64::EPSILON;
                     let r = Ray2d::rand_hemisphere(p, hit.n);
 
-                    let (d2, light) = self.trace_ray(&r, depth - 1);
+                    let light = self.trace_ray(&r, depth - 1);
 
-                    (hit.t + d2, absorption * light)
+                    absorption * light
                 }
                 Material::Emissive {
                     emission: emission_color,
                 } => {
                     let total_dist = hit.t + 1.;
                     let distance_coeff = 1. / (total_dist);
-                    (total_dist, emission_color * distance_coeff as f32)
+                    let distance_coeff = 1.;
+                    emission_color * distance_coeff as f32
                 }
                 Material::DirectionalEmissive {
                     emission: emission_color,
@@ -842,9 +849,9 @@ impl World {
                 } => {
                     if ray.dir.dot(-hit.n) >= angle {
                         let distance_coeff = 1. / (hit.t + d);
-                        (hit.t + d, emission_color * distance_coeff as f32)
+                        emission_color * distance_coeff as f32
                     } else {
-                        (0., Spectrum::default())
+                        Spectrum::default()
                     }
                 }
                 Material::Reflective => {
@@ -852,11 +859,11 @@ impl World {
                     let p = hit.p + hit.n * 10000. * f64::EPSILON;
                     let r = Ray2d::new(p, ray.dir.reflect(hit.n));
 
-                    let (t, col) = self.trace_ray(&r, depth - 1);
-                    (hit.t + t, col)
+                    let col = self.trace_ray(&r, depth - 1);
+                    col
                 }
                 Material::Dielectric { ior } => {
-                    let ior = ior.ior(0);
+                    let ior = ior.ior(400.);
                     let p = hit.p - hit.n * 10000. * f64::EPSILON;
                     let refracted_ray = ray.dir.refract(hit.n, 1. / ior);
                     let r = if refracted_ray == DVec2::ZERO {
@@ -864,8 +871,8 @@ impl World {
                     } else {
                         Ray2d::new(p, refracted_ray)
                     };
-                    let (t, col) = self.trace_ray(&r, depth - 1);
-                    (hit.t + t, col)
+                    let col = self.trace_ray(&r, depth - 1);
+                    col
                 }
             }
         }

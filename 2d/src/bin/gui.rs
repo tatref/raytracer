@@ -265,6 +265,7 @@ impl<'a> eframe::App for MyApp<'a> {
                                                 egui::DragValue::new(ior).speed(0.1).range(0..=5),
                                             );
                                         }
+                                        _ => (),
                                     }
                                 }
                                 Material::Diffuse { absorption } => {

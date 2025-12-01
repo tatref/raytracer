@@ -18,7 +18,7 @@ pub fn cornell_box(render_params: RenderParams, _t: f64, _idx: u64) -> World {
     );
     let light = Object::new(
         Shape::Circle(Circle::new(center, 5.)),
-        Material::emissive(Spectrum::color(SpectrumColor::White) * 5.),
+        Material::emissive(Spectrum::color(SpectrumColor::White) * 0.5),
     );
     objects.push(light);
 
@@ -118,7 +118,7 @@ pub fn colors_world(render_params: RenderParams, _t: f64, _idx: u64) -> World {
         let center = DVec2::new(100. + idx as f64 * spacing, 150.);
         let light = Object::new(
             Shape::Circle(Circle::new(center, 10.)),
-            Material::emissive(spectrum * 5.),
+            Material::emissive(spectrum * 0.1),
         );
         objects.push(light);
 
