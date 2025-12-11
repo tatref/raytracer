@@ -21,3 +21,4 @@ eframe = "0.33.2"
 egui_extras = { version = "0.33.2", features = ["all_loaders"] }
 palette = "0.7.6"
 egui_plot = "0.34.0"
+bytemuck = { version = "1.24.0", features = ["derive"] }

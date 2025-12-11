@@ -1,6 +1,12 @@
 #![allow(dead_code)]
 #![allow(unused)]
 
+use std::{
+    io::Write,
+    sync::mpsc::{self, Receiver, Sender},
+    thread::{self, JoinHandle, Thread},
+};
+
 use eframe::egui::{self, CollapsingHeader, Image, TextureHandle, TextureOptions, Ui};
 use image::EncodableLayout;
 use raytracer::{
@@ -8,10 +14,34 @@ use raytracer::{
     librt2d::*,
     worlds::*,
 };
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize)]
+struct CheckPoint {
+    world: World,
+    raw_image: RawImage,
+}
+
+impl CheckPoint {
+    fn save_checkpoint(&self, path: &str) -> Result<(), Box<dyn std::error::Error>> {
+        let mut f = std::fs::File::create(path)?;
+
+        let serialized = rmp_serde::encode::to_vec(self)?;
+        f.write_all(&serialized)?;
+
+        Ok(())
+    }
+
+    fn load_checkpoint(path: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        let mut f = std::fs::File::open(path)?;
+        let val: CheckPoint = rmp_serde::decode::from_read(f)?;
+        Ok(val)
+    }
+}
 
 fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default().with_maximized(true),
+        viewport: egui::ViewportBuilder::default().with_inner_size((1024., 768.)),
         ..Default::default()
     };
     eframe::run_native(
@@ -55,22 +85,32 @@ struct MyApp<'a> {
     world: World,
     texture_handle: Option<TextureHandle>,
     current_image: Option<(Image<'a>, RawImage)>,
+    tx: Option<Sender<RenderCommand>>,
+    rx: Option<Receiver<RenderProgress>>,
+    render_thread: Option<JoinHandle<()>>,
 }
 
 impl<'a> Default for MyApp<'a> {
     fn default() -> Self {
         let width = 800;
         let height = 600;
-        let spp = 50;
+        let spp = 100;
         let recursion_limit = 10;
 
+        let denoiser = Denoiser {
+            mask_size: 2,
+            oversampling_factor: 1.,
+            top: 0.0005,
+            passes: 10,
+        };
         let render_params = RenderParams {
             height,
             spp,
             width,
             recursion_limit,
-            //denoiser,
-            denoiser: None,
+            lambda_samples: 2,
+            denoiser: Some(denoiser),
+            //denoiser: None,
         };
 
         let world = colors_world(render_params, 0., 0);
@@ -80,42 +120,29 @@ impl<'a> Default for MyApp<'a> {
             world,
             texture_handle: None,
             current_image: None,
+            tx: None,
+            rx: None,
+            render_thread: None,
         }
     }
 }
 
 impl<'a> MyApp<'a> {
     fn render(&mut self, ctx: &egui::Context) {
-        let render_params = RenderParams {
-            height: 600,
-            spp: 20,
-            width: 800,
-            recursion_limit: 10,
-            //denoiser,
-            denoiser: None,
-        };
         let t = 0.;
         let chrono = std::time::Instant::now();
-        let mut raw_image = self.world.render();
-        let elapsed = chrono.elapsed();
-        dbg!(elapsed);
-        //annotate(&mut raw_image, &self.world, self.p);
-        let image = raw_image.convert_to_image(&ToneMappingMethod::Reinhard);
 
-        let image = egui::ColorImage::from_rgba_unmultiplied(
-            [image.width() as usize, image.height() as usize],
-            image.as_bytes(),
-        );
-        let image_size = image.size;
+        let (tx1, rx1) = mpsc::channel();
+        let (tx2, rx2) = mpsc::channel();
 
-        let handle = ctx.load_texture("image texture", image, TextureOptions::default());
-        self.texture_handle = Some(handle.clone());
-        let sized_image = egui::load::SizedTexture::new(
-            handle.id(),
-            egui::vec2(image_size[0] as f32, image_size[1] as f32),
-        );
-        let image = egui::Image::from_texture(sized_image);
-        self.current_image = Some((image, raw_image));
+        self.rx = Some(rx1);
+        self.tx = Some(tx2);
+
+        let world = self.world.clone();
+        let render_thread = thread::spawn(move || {
+            world.endless_render(tx1, rx2);
+        });
+        self.render_thread = Some(render_thread);
     }
 }
 
@@ -129,6 +156,33 @@ fn render_params_ui(ui: &mut Ui, render_params: &mut RenderParams) {
         ui.label("recursion limit");
         ui.add(egui::DragValue::new(&mut render_params.recursion_limit).speed(1));
     });
+    ui.horizontal(|ui| {
+        ui.label("lambda samples");
+        ui.add(egui::DragValue::new(&mut render_params.lambda_samples).speed(1));
+    });
+
+    match &mut render_params.denoiser {
+        Some(denoiser) => {
+            ui.heading("Denoiser");
+            ui.horizontal(|ui| {
+                ui.label("passes");
+                ui.add(egui::DragValue::new(&mut denoiser.passes).speed(1));
+            });
+            ui.horizontal(|ui| {
+                ui.label("top");
+                ui.add(egui::DragValue::new(&mut denoiser.top).speed(0.01));
+            });
+            ui.horizontal(|ui| {
+                ui.label("oversampling factor");
+                ui.add(egui::DragValue::new(&mut denoiser.oversampling_factor).speed(1));
+            });
+            ui.horizontal(|ui| {
+                ui.label("mask size");
+                ui.add(egui::DragValue::new(&mut denoiser.mask_size).speed(1));
+            });
+        }
+        None => (),
+    }
 }
 
 impl<'a> eframe::App for MyApp<'a> {
@@ -303,18 +357,53 @@ impl<'a> eframe::App for MyApp<'a> {
             //    .default_width(900.)
             //    .show_inside();
 
-            egui::CentralPanel::default().show(ctx, |ui| match &self.current_image {
-                Some((image, raw_image)) => {
-                    ui.add_sized(image.size().unwrap(), image.clone());
+            egui::CentralPanel::default().show(ctx, |ui| {
+                //
+                self.rx.as_ref().map(|rx| {
+                    if let Ok(render_progress) = rx.try_recv() {
+                        dbg!(render_progress.loops);
 
-                    ui.separator();
+                        let image = render_progress
+                            .raw_image
+                            .convert_to_image(&ToneMappingMethod::Reinhard);
 
-                    if ui.button("Save out.png").clicked() {
-                        let image = raw_image.convert_to_image(&ToneMappingMethod::Reinhard);
-                        let _ = image.save("out.png");
+                        let image = egui::ColorImage::from_rgba_unmultiplied(
+                            [image.width() as usize, image.height() as usize],
+                            image.as_bytes(),
+                        );
+                        let image_size = image.size;
+
+                        let handle =
+                            ctx.load_texture("image texture", image, TextureOptions::default());
+                        self.texture_handle = Some(handle.clone());
+                        let sized_image = egui::load::SizedTexture::new(
+                            handle.id(),
+                            egui::vec2(image_size[0] as f32, image_size[1] as f32),
+                        );
+                        let image = egui::Image::from_texture(sized_image);
+                        self.current_image = Some((image, render_progress.raw_image));
+                    };
+                });
+
+                match &self.current_image {
+                    Some((image, raw_image)) => {
+                        ui.add_sized(image.size().unwrap(), image.clone());
+
+                        ui.separator();
+
+                        if ui.button("Save out.png & checkpoint.dat").clicked() {
+                            let image = raw_image.convert_to_image(&ToneMappingMethod::Reinhard);
+                            let _ = image.save("out.png");
+
+                            let checkpoint = CheckPoint {
+                                raw_image: raw_image.clone(),
+                                world: self.world.clone(),
+                            };
+                            checkpoint.save_checkpoint("checkpoint.dat").unwrap();
+                        }
                     }
+                    None => {}
                 }
-                None => {}
             });
         });
     }

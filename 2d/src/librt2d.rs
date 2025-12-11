@@ -1,15 +1,22 @@
 #![allow(dead_code)]
 #![allow(unused)]
 
-use std::f64::consts::PI;
+use std::{
+    arch::x86_64::_MM_PERM_ABDA,
+    collections::HashSet,
+    f64::consts::PI,
+    io::Write,
+    os::raw,
+    sync::mpsc::{Receiver, Sender},
+};
 
 use crate::{
     Color,
     img::{Blending, PixelData, RawImage, ToneMappingMethod},
-    spectrum::Spectrum,
+    spectrum::{SPECTRUM_SAMPLES, Spectrum},
 };
 use glam::{DVec2, IVec2, Vec3};
-use itertools::Itertools;
+use itertools::{Itertools, iproduct};
 use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 
@@ -50,7 +57,7 @@ pub fn annotate(raw_image: &mut RawImage, world: &World, p: DVec2) {
     //}
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Node {
     objects: Vec<Object>,
     aabb: Aabb,
@@ -624,6 +631,7 @@ pub enum Ior {
 }
 impl Ior {
     pub fn ior(&self, lambda: f64) -> f64 {
+        let lambda = lambda / 1000.;
         match self {
             Ior::Simple(ior) => *ior,
             Ior::Cauchy { a, b } => *a + *b / lambda.powi(2),
@@ -719,17 +727,29 @@ pub struct RenderParams {
     pub height: i32,
     pub spp: usize,
     pub recursion_limit: usize,
+    pub lambda_samples: usize,
     pub denoiser: Option<Denoiser>,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Denoiser {
     pub top: f32,
     pub mask_size: i32,
-    pub oversample_factor: f32,
+    pub oversampling_factor: f32,
+    pub passes: usize,
 }
 
-#[derive(Serialize, Deserialize)]
+pub struct RenderProgress {
+    pub loops: usize,
+    pub raw_image: RawImage,
+}
+
+#[derive(Debug)]
+pub enum RenderCommand {
+    StopRender,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
 pub struct World {
     pub render_params: RenderParams,
     //light: Light,
@@ -753,6 +773,13 @@ impl World {
             quadtree,
             render_params,
         }
+    }
+
+    fn save(&self, path: &str) -> Result<(), Box<dyn std::error::Error>> {
+        let mut f = std::fs::File::create(path)?;
+        rmp_serde::encode::write(&mut f, self)?;
+
+        Ok(())
     }
 
     pub fn compute_arc_sections(&self, p: DVec2) -> Vec<ArcSection> {
@@ -807,18 +834,30 @@ impl World {
             match obj.mat {
                 Material::Emissive { emission } => emission,
                 Material::Dielectric { ior } => {
-                    let lambda_samples = 10;
-                    let ior = ior.ior(400.);
-                    let p = hit.p + hit.n * 10000. * f64::EPSILON;
-                    let refracted_ray = ray.dir.refract(-hit.n, ior);
-                    let r = if refracted_ray == DVec2::ZERO {
-                        Ray2d::new(p, ray.dir.reflect(-hit.n))
-                    } else {
-                        Ray2d::new(p, refracted_ray)
-                    };
-                    let col = self.trace_ray(&r, depth - 1);
+                    let mut total_spectrum = Spectrum::default();
 
-                    col
+                    for _ in 0..self.render_params.lambda_samples {
+                        let (lambda_idx, lambda) = Spectrum::rand_lambda();
+
+                        let ior = ior.ior(lambda);
+                        let p = hit.p + hit.n * 10000. * f64::EPSILON;
+                        let refracted_ray = ray.dir.refract(-hit.n, ior);
+                        let r = if refracted_ray == DVec2::ZERO {
+                            Ray2d::new(p, ray.dir.reflect(-hit.n))
+                        } else {
+                            Ray2d::new(p, refracted_ray)
+                        };
+                        let mut spectrum = self.trace_ray(&r, depth - 1);
+                        for (i, l) in spectrum.data.iter_mut().enumerate() {
+                            if i != lambda_idx {
+                                *l = 0.;
+                            }
+                        }
+                        total_spectrum += spectrum;
+                    }
+
+                    total_spectrum / self.render_params.lambda_samples as f32
+                        * SPECTRUM_SAMPLES as f32
                 }
                 _ => Spectrum::default(),
             }
@@ -826,6 +865,11 @@ impl World {
             // outside
             match obj.mat {
                 Material::Diffuse { absorption } => {
+                    if absorption == Spectrum::default() {
+                        // 100% absorption
+                        return Spectrum::default();
+                    }
+
                     // recurse
                     let p = hit.p + hit.n * 10000. * f64::EPSILON;
                     let r = Ray2d::rand_hemisphere(p, hit.n);
@@ -863,16 +907,28 @@ impl World {
                     col
                 }
                 Material::Dielectric { ior } => {
-                    let ior = ior.ior(400.);
-                    let p = hit.p - hit.n * 10000. * f64::EPSILON;
-                    let refracted_ray = ray.dir.refract(hit.n, 1. / ior);
-                    let r = if refracted_ray == DVec2::ZERO {
-                        Ray2d::new(p, ray.dir.reflect(hit.n))
-                    } else {
-                        Ray2d::new(p, refracted_ray)
-                    };
-                    let col = self.trace_ray(&r, depth - 1);
-                    col
+                    let mut total_spectrum = Spectrum::default();
+
+                    for _ in 0..self.render_params.lambda_samples {
+                        let (lambda_idx, lambda) = Spectrum::rand_lambda();
+                        let ior = ior.ior(lambda);
+                        let p = hit.p - hit.n * 10000. * f64::EPSILON;
+                        let refracted_ray = ray.dir.refract(hit.n, 1. / ior);
+                        let r = if refracted_ray == DVec2::ZERO {
+                            Ray2d::new(p, ray.dir.reflect(hit.n))
+                        } else {
+                            Ray2d::new(p, refracted_ray)
+                        };
+                        let mut spectrum = self.trace_ray(&r, depth - 1);
+                        for (i, l) in spectrum.data.iter_mut().enumerate() {
+                            if i != lambda_idx {
+                                *l = 0.;
+                            }
+                        }
+                        total_spectrum += spectrum;
+                    }
+                    total_spectrum / self.render_params.lambda_samples as f32
+                        * SPECTRUM_SAMPLES as f32
                 }
             }
         }
@@ -895,7 +951,7 @@ impl World {
         pixels
     }
 
-    pub fn render(&self) -> RawImage {
+    pub fn global_render(&self) -> RawImage {
         let mut raw_image = RawImage::new(self.render_params.width, self.render_params.height);
 
         // parallel v1
@@ -914,80 +970,141 @@ impl World {
             }
         }
 
+        raw_image
+    }
+
+    pub fn render(&self) -> RawImage {
         //let aabb_color = Color::new(1., 0., 1.);
         //self.quadtree.draw(&mut raw_image, aabb_color);
+
+        let mut raw_image = self.global_render();
 
         let image = raw_image.convert_to_image(&ToneMappingMethod::Reinhard);
         image.save("raw.png").unwrap();
 
-        match self.render_params.denoiser {
-            Some(_) => unimplemented!(), /*self.denoise(&self.render_params, raw_image)*/
+        match &self.render_params.denoiser {
+            Some(denoiser) => {
+                for pass in 0..denoiser.passes {
+                    let chrono = std::time::Instant::now();
+                    self.denoise(&self.render_params, &mut raw_image, pass);
+                    let elapsed = chrono.elapsed();
+                    println!("denoise pass={}/{}: {:?}", pass, denoiser.passes, elapsed);
+                    //let image = raw_image.convert_to_image(&ToneMappingMethod::Reinhard);
+                    //image.save(format!("out/raw_{}.png", pass)).unwrap();
+                }
+                raw_image
+            }
             None => raw_image,
         }
     }
 
-    //fn denoise(&self, render_params: &RenderParams, mut raw_image: RawImage) -> RawImage {
-    //    let denoiser = render_params.denoiser.as_ref().unwrap();
+    pub fn endless_render(&self, tx: Sender<RenderProgress>, rx: Receiver<RenderCommand>) {
+        let mut raw_image = RawImage::new(self.render_params.width, self.render_params.height);
 
-    //    let laplace_kernel = [[-1., -1., -1.], [-1., 8., -1.], [-1., -1., -1.]];
-    //    let laplace_image = raw_image
-    //        .convolution(laplace_kernel)
-    //        .map_pixel(|p| Vec3::splat(p.length()));
-    //    laplace_image
-    //        .convert_to_image(&ToneMappingMethod::Reinhard)
-    //        .save("laplace.png")
-    //        .unwrap();
+        let mut i = 0;
+        loop {
+            println!("loop {}", i);
 
-    //    let mut sorted_pixels: Vec<(usize, &f32)> = laplace_image.data.iter().enumerate().collect();
-    //    sorted_pixels.sort_by(|a, b| a.1.total_cmp(&b.1));
-    //    sorted_pixels.reverse();
+            let render_progress = RenderProgress {
+                loops: i,
+                raw_image: raw_image.clone(),
+            };
+            if let Err(e) = tx.send(render_progress) {
+                println!("Can't send render_progress: {:?}", e);
+            }
+            if let Ok(render_command) = rx.try_recv() {
+                println!("Received RenderCommand: {:?}", render_command);
+                break;
+            }
 
-    //    let total_pixels = render_params.width * render_params.height * 3;
-    //    let top = (total_pixels as f32 * denoiser.top) as usize;
-    //    let recompute_indexes: Vec<usize> = sorted_pixels[0..top]
-    //        .iter()
-    //        .map(|(idx, _val)| *idx)
-    //        .collect();
+            let chrono = std::time::Instant::now();
+            let mut loop_image = self.global_render();
+            raw_image = raw_image + loop_image;
+            self.denoise(&self.render_params, &mut raw_image, 10);
+            let elapsed = chrono.elapsed();
+            println!("render loop = {:?}", elapsed);
 
-    //    let mut recompute_mask = raw_image.clone();
-    //    let recompute_pixels: HashSet<IVec2> = recompute_indexes
-    //        .iter()
-    //        .map(|idx| {
-    //            let mut pixels = Vec::new();
-    //            let pixel = recompute_mask.idx_to_pixel(*idx).unwrap();
-    //            let mask_size = denoiser.mask_size;
-    //            for (i, j) in iproduct!(-mask_size..=mask_size, -mask_size..=mask_size) {
-    //                pixels.push(pixel + IVec2::new(i, j));
-    //            }
+            let chrono = std::time::Instant::now();
 
-    //            pixels
-    //        })
-    //        .flatten()
-    //        .collect();
+            i += 1;
+        }
+    }
 
-    //    for pixel in recompute_pixels.iter() {
-    //        let _ = recompute_mask.draw_pixel(*pixel, Color::new(1., 0., 1.), Blending::Replace);
-    //    }
-    //    recompute_mask
-    //        .convert_to_image(&ToneMappingMethod::Reinhard)
-    //        .save("mask.png")
-    //        .unwrap();
+    fn denoise(&self, render_params: &RenderParams, raw_image: &mut RawImage, pass: usize) {
+        let denoiser = render_params.denoiser.as_ref().unwrap();
 
-    //    let xxx: Vec<_> = recompute_pixels
-    //        .par_iter()
-    //        .map(|&pixel| {
-    //            let color = self.compute_pixel(
-    //                pixel,
-    //                (render_params.spp as f32 * denoiser.oversample_factor) as usize,
-    //                render_params.recursion_limit,
-    //            );
-    //            (pixel, color)
-    //        })
-    //        .collect();
-    //    for (pixel, color) in xxx {
-    //        let _ = raw_image.draw_pixel(pixel, color, Blending::Replace);
-    //    }
+        let laplace_kernel = [[-1., -1., -1.], [-1., 8., -1.], [-1., -1., -1.]];
+        let laplace_image = raw_image
+            .convolution(laplace_kernel)
+            .map_pixel(|p| PixelData {
+                value: Vec3::splat(p.value.length()),
+                weight: 1.,
+            });
+        //laplace_image
+        //    .convert_to_image(&ToneMappingMethod::Reinhard)
+        //    .save(format!("out/laplace_{}.png", pass))
+        //    .unwrap();
 
-    //    raw_image
-    //}
+        let mut sorted_pixels: Vec<(usize, &PixelData)> =
+            laplace_image.data.iter().enumerate().collect();
+        sorted_pixels.sort_by(|a, b| a.1.value.length().total_cmp(&b.1.value.length()));
+        sorted_pixels.reverse();
+
+        let total_pixels = render_params.width * render_params.height;
+        let top = (total_pixels as f32 * denoiser.top) as usize;
+        let recompute_indexes: Vec<usize> = sorted_pixels[0..top]
+            .iter()
+            .map(|(idx, _val)| *idx)
+            .collect();
+
+        let mut recompute_mask = raw_image.clone();
+        let recompute_pixels: HashSet<IVec2> = recompute_indexes
+            .iter()
+            .map(|idx| {
+                let mut pixels = Vec::new();
+                let pixel = recompute_mask.idx_to_pixel(*idx).unwrap();
+                let mask_size = denoiser.mask_size;
+                for (i, j) in iproduct!(-mask_size..=mask_size, -mask_size..=mask_size) {
+                    pixels.push(pixel + IVec2::new(i, j));
+                }
+
+                pixels
+            })
+            .flatten()
+            .collect();
+
+        for pixel in recompute_pixels.iter() {
+            let _ = recompute_mask.draw_pixel(
+                *pixel,
+                PixelData {
+                    weight: 1.,
+                    value: Vec3::new(1., 0., 1.),
+                },
+                Blending::Replace,
+            );
+        }
+        //recompute_mask
+        //    .convert_to_image(&ToneMappingMethod::Reinhard)
+        //    .save(format!("out/mask_{}.png", pass))
+        //    .unwrap();
+
+        let xxx: Vec<_> = recompute_pixels
+            .par_iter()
+            .map(|&pixel| {
+                let color = self.compute_pixel(
+                    pixel,
+                    (render_params.spp as f32 * denoiser.oversampling_factor) as usize,
+                    render_params.recursion_limit,
+                );
+                (pixel, color)
+            })
+            .collect();
+        for (pixel, spectrum) in xxx {
+            let pixel_data = PixelData {
+                value: spectrum.to_dvec3(),
+                weight: (render_params.spp as f32 * denoiser.oversampling_factor),
+            };
+            let _ = raw_image.draw_pixel(pixel, pixel_data, Blending::Add);
+        }
+    }
 }

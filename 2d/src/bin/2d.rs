@@ -16,17 +16,20 @@ fn main() {
     let height = 600;
     let spp = 500;
     let recursion_limit = 10;
+    let lambda_samples = 2;
 
     let denoiser = Some(Denoiser {
         top: 0.01,
-        oversample_factor: 10.,
+        oversampling_factor: 10.,
         mask_size: 2,
+        passes: 1,
     });
     let render_params = RenderParams {
         height,
         spp,
         width,
         recursion_limit,
+        lambda_samples,
         //denoiser,
         denoiser: None,
     };

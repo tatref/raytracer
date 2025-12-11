@@ -1,6 +1,7 @@
 use glam::Vec3;
 use palette::{IntoColor, Srgb, xyz::Xyz};
-use serde::{Deserialize, Serialize};
+use serde::ser::SerializeSeq;
+use serde::{Deserialize, Serialize, Serializer};
 
 /// Data from http://www.cvrl.org/cmfs.htm, CIE 1931 2-deg, XYZ CMFs
 /// 360 nm -> 830 nm += 5nm
@@ -107,7 +108,7 @@ pub const SPECTRUM_LAMBDA_MIN: u16 = 360;
 pub const SPECTRUM_LAMBDA_MAX: u16 = 830;
 
 /// ! Spectrum from 360 nm to 830 nm, increment by 5 nm
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Spectrum {
     pub data: [f32; SPECTRUM_SAMPLES],
 }
@@ -125,7 +126,11 @@ impl Serialize for Spectrum {
     where
         S: serde::Serializer,
     {
-        todo!()
+        let mut seq = serializer.serialize_seq(Some(self.data.len()))?;
+        for e in &self.data {
+            seq.serialize_element(e)?;
+        }
+        seq.end()
     }
 }
 
@@ -174,6 +179,11 @@ impl Spectrum {
         } else {
             Ok(Spectrum { data: data })
         }
+    }
+
+    pub fn rand_lambda() -> (usize, f64) {
+        let i = rand::random_range(0..SPECTRUM_SAMPLES);
+        return (i, i as f64 * 5. + 360.);
     }
 
     pub fn from(data: &[f32]) -> Result<Self, ()> {

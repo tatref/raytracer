@@ -7,6 +7,9 @@ https://jo.dreggn.org/path-tracing-in-production/2017/talk-jo/
 Ray Tracing in One Weekend
 https://raytracing.github.io/
 
+Spectral Raytracing
+https://graphics.cg.uni-saarland.de/courses/ris-2021/slides/Spectral%20Raytracing.pdf
+
 
 # ffmpeg commands
 

@@ -1,6 +1,7 @@
 use glam::{IVec2, Vec3};
 use image::{ImageBuffer, Rgba};
 use itertools::Itertools;
+use serde::{Deserialize, Serialize};
 
 #[derive(Copy, Clone)]
 pub enum ToneMappingMethod {
@@ -14,7 +15,7 @@ pub enum Blending {
     Replace,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Serialize, Deserialize)]
 pub struct PixelData {
     pub weight: f32,
     pub value: Vec3,
@@ -64,7 +65,7 @@ impl Div<f32> for PixelData {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct RawImage {
     pub width: i32,
     pub height: i32,
@@ -78,6 +79,13 @@ impl RawImage {
             height,
             data,
         }
+    }
+
+    fn save(&self, path: &str) -> Result<(), Box<dyn std::error::Error>> {
+        let mut f = std::fs::File::create(path)?;
+        rmp_serde::encode::write(&mut f, self)?;
+
+        Ok(())
     }
 
     pub fn pixel_to_idx(&self, pixel: IVec2) -> Result<usize, ()> {
@@ -195,5 +203,23 @@ impl RawImage {
         }
 
         img
+    }
+}
+
+impl Add for RawImage {
+    type Output = RawImage;
+    fn add(self, rhs: Self) -> Self::Output {
+        let mut sum = RawImage::new(self.width, self.height);
+
+        for ((dest, src_self), src_rhs) in sum
+            .data
+            .iter_mut()
+            .zip(self.data.iter())
+            .zip(rhs.data.iter())
+        {
+            *dest = *src_self + *src_rhs;
+        }
+
+        sum
     }
 }

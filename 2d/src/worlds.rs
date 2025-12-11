@@ -25,7 +25,7 @@ pub fn cornell_box(render_params: RenderParams, _t: f64, _idx: u64) -> World {
     let top = Object::segment(
         DVec2::new(200., 100.),
         DVec2::new(600., 100.),
-        Material::diffuse(Spectrum::color(SpectrumColor::Blue)),
+        Material::diffuse(Spectrum::color(SpectrumColor::White)),
     );
     objects.push(top);
 
@@ -39,7 +39,7 @@ pub fn cornell_box(render_params: RenderParams, _t: f64, _idx: u64) -> World {
     let left = Object::segment(
         DVec2::new(200., 500.),
         DVec2::new(200., 100.),
-        Material::diffuse(Spectrum::color(SpectrumColor::Green)),
+        Material::diffuse(Spectrum::color(SpectrumColor::Blue)),
     );
     objects.push(left);
 
@@ -54,6 +54,31 @@ pub fn cornell_box(render_params: RenderParams, _t: f64, _idx: u64) -> World {
         Material::dieletric(1.5),
     );
     objects.push(sphere);
+    //objects.push(sphere);
+    //let sides = 3;
+    //let points: Vec<DVec2> = (0..sides)
+    //    .map(|i| {
+    //        DVec2::from_angle(i as f64 / sides as f64 * 2. * PI + 0.5) * 50.
+    //            + DVec2::new(500., 400.)
+    //    })
+    //    .rev()
+    //    .collect();
+    //let prism = Object::from_points(
+    //    &points,
+    //    Material::Dielectric {
+    //        ior: Ior::Cauchy { a: 1.45, b: 0.04 },
+    //    },
+    //);
+    //objects.push(prism);
+
+    let sphere = Object::new(
+        Shape::Circle(Circle::new(DVec2::new(300., 400.), 50.)),
+        Material::Dielectric {
+            //ior: Ior::Cauchy { a: 1.45, b: 0.1 },
+            ior: Ior::Cauchy { a: 1.45, b: 0.04 },
+        },
+    );
+    objects.push(sphere);
 
     let sides = 4;
     let points: Vec<DVec2> = (0..sides)
@@ -62,15 +87,11 @@ pub fn cornell_box(render_params: RenderParams, _t: f64, _idx: u64) -> World {
         })
         .rev()
         .collect();
-    let xxx = Object::from_points(&points, Material::Reflective);
-    objects.push(xxx);
-
-    let obj = Object::segment(
-        DVec2::new(350., 400.),
-        DVec2::new(300., 400.),
-        Material::Reflective,
+    let xxx = Object::from_points(
+        &points,
+        Material::diffuse(Spectrum::color(SpectrumColor::White)),
     );
-    objects.push(obj);
+    objects.push(xxx);
 
     let world = World::new(objects, render_params);
 
@@ -126,7 +147,7 @@ pub fn colors_world(render_params: RenderParams, _t: f64, _idx: u64) -> World {
         let center = DVec2::new(100. + idx as f64 * spacing, 450.);
         let light = Object::new(
             Shape::Circle(Circle::new(center, 10.)),
-            Material::emissive(Spectrum::color(SpectrumColor::White) * 1.),
+            Material::emissive(Spectrum::color(SpectrumColor::White) * 0.1),
         );
         objects.push(light);
 
@@ -156,7 +177,7 @@ pub fn complex_world(render_params: RenderParams, _t: f64, _idx: u64) -> World {
 
     let materials = [
         Material::Reflective,
-        Material::emissive(Spectrum::color(SpectrumColor::White) * 1.),
+        Material::emissive(Spectrum::color(SpectrumColor::White) * 0.08),
         Material::diffuse(Spectrum::color(SpectrumColor::White)),
         Material::dieletric(1.5),
     ];
@@ -178,7 +199,7 @@ pub fn sample_world(render_params: RenderParams, t: f64, _idx: u64) -> World {
 
     let light = Object::new(
         Shape::Circle(Circle::new(DVec2::new(600., 400.), 20.)),
-        Material::emissive(Spectrum::color(SpectrumColor::White) * 1.),
+        Material::emissive(Spectrum::color(SpectrumColor::White) * 0.1),
     );
     objects.push(light);
 
@@ -192,7 +213,10 @@ pub fn sample_world(render_params: RenderParams, t: f64, _idx: u64) -> World {
             ),
             10.,
         )),
-        Material::dieletric(1.5),
+        //Material::dieletric(1.5),
+        Material::Dielectric {
+            ior: Ior::Cauchy { a: 1.45, b: 0.0354 },
+        },
     );
     objects.push(dielectric);
 
@@ -222,7 +246,7 @@ pub fn sample_world(render_params: RenderParams, t: f64, _idx: u64) -> World {
 
     let big_light = Object::new(
         Shape::Circle(Circle::new(DVec2::new(50. + angle.sin() * 100., 100.), 20.)),
-        Material::emissive(Spectrum::color(SpectrumColor::White) * 1.),
+        Material::emissive(Spectrum::color(SpectrumColor::White) * 0.1),
     );
     objects.push(big_light);
 
@@ -250,7 +274,7 @@ pub fn sample_world(render_params: RenderParams, t: f64, _idx: u64) -> World {
     let strip = bezier.as_segments(100);
     let bezier_strip = Strip::new(&strip);
     //let bezier_obj = Object::new(Shape::Strip(bezier_strip), Material::diffuse(Color::ONE));
-    let bezier_obj = Object::new(Shape::Strip(bezier_strip), Material::dieletric(1.5));
+    let bezier_obj = Object::new(Shape::Strip(bezier_strip), Material::Reflective);
     objects.push(bezier_obj);
 
     let wall = Object::new(
@@ -315,7 +339,10 @@ pub fn sample_world(render_params: RenderParams, t: f64, _idx: u64) -> World {
             DVec2::new(200., 300.),
             DVec2::new(125., 350.),
         ],
-        Material::dieletric(1.5),
+        //Material::dieletric(1.5),
+        Material::Dielectric {
+            ior: Ior::Cauchy { a: 1.45, b: 0.0354 },
+        },
         //Material::diffuse(Color::ZERO),
     );
     objects.push(dieletric);
