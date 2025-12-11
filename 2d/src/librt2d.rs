@@ -999,9 +999,16 @@ impl World {
     }
 
     pub fn endless_render(&self, tx: Sender<RenderProgress>, rx: Receiver<RenderCommand>) {
-        let mut raw_image = RawImage::new(self.render_params.width, self.render_params.height);
+        let mut raw_image = self.global_render();
+        let render_progress = RenderProgress {
+            loops: 0,
+            raw_image: raw_image.clone(),
+        };
+        if let Err(e) = tx.send(render_progress) {
+            println!("Can't send render_progress: {:?}", e);
+        }
 
-        let mut i = 0;
+        let mut i = 1;
         loop {
             println!("loop {}", i);
 
@@ -1019,8 +1026,11 @@ impl World {
 
             let chrono = std::time::Instant::now();
             let mut loop_image = self.global_render();
+
             raw_image = raw_image + loop_image;
-            self.denoise(&self.render_params, &mut raw_image, 10);
+            if self.render_params.denoiser.is_some() {
+                self.denoise(&self.render_params, &mut raw_image, 10);
+            }
             let elapsed = chrono.elapsed();
             println!("render loop = {:?}", elapsed);
 

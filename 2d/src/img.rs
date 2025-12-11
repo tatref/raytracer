@@ -199,7 +199,7 @@ impl RawImage {
                 }
             }
 
-            dst[3] = 254;
+            dst[3] = 255;
         }
 
         img

@@ -77,7 +77,7 @@ enum WorldList {
     Simple,
     Complex,
     Sample,
-    Colors,
+    Spectrum,
 }
 
 struct MyApp<'a> {
@@ -88,6 +88,7 @@ struct MyApp<'a> {
     tx: Option<Sender<RenderCommand>>,
     rx: Option<Receiver<RenderProgress>>,
     render_thread: Option<JoinHandle<()>>,
+    current_loop: usize,
 }
 
 impl<'a> Default for MyApp<'a> {
@@ -109,28 +110,28 @@ impl<'a> Default for MyApp<'a> {
             width,
             recursion_limit,
             lambda_samples: 2,
-            denoiser: Some(denoiser),
-            //denoiser: None,
+            //denoiser: Some(denoiser),
+            denoiser: None,
         };
 
-        let world = colors_world(render_params, 0., 0);
+        let world = spectrum_world(render_params, 0., 0);
 
         Self {
-            load_world: WorldList::Colors,
+            load_world: WorldList::Spectrum,
             world,
             texture_handle: None,
             current_image: None,
             tx: None,
             rx: None,
             render_thread: None,
+            current_loop: 0,
         }
     }
 }
 
 impl<'a> MyApp<'a> {
     fn render(&mut self, ctx: &egui::Context) {
-        let t = 0.;
-        let chrono = std::time::Instant::now();
+        println!("Starting render...");
 
         let (tx1, rx1) = mpsc::channel();
         let (tx2, rx2) = mpsc::channel();
@@ -219,15 +220,15 @@ impl<'a> eframe::App for MyApp<'a> {
                                 );
                                 ui.selectable_value(
                                     &mut self.load_world,
-                                    WorldList::Colors,
-                                    "Colors",
+                                    WorldList::Spectrum,
+                                    "Spectrum",
                                 );
                             });
 
                         if ui.button("Load").clicked() {
                             self.world = match self.load_world {
-                                WorldList::Colors => {
-                                    colors_world(self.world.render_params.clone(), 0., 0)
+                                WorldList::Spectrum => {
+                                    spectrum_world(self.world.render_params.clone(), 0., 0)
                                 }
                                 WorldList::CornellBox => {
                                     cornell_box(self.world.render_params.clone(), 0., 0)
@@ -248,8 +249,15 @@ impl<'a> eframe::App for MyApp<'a> {
 
                         render_params_ui(ui, &mut self.world.render_params);
 
-                        if ui.button("Render").clicked() {
-                            self.render(ctx);
+                        if self.render_thread.is_none() {
+                            if ui.button("Render").clicked() {
+                                self.render(ctx);
+                            }
+                        } else {
+                            if ui.button("Stop").clicked() {
+                                self.tx.as_ref().unwrap().send(RenderCommand::StopRender);
+                                self.render_thread.take().unwrap().join().unwrap();
+                            }
                         }
 
                         ui.separator();
@@ -361,7 +369,7 @@ impl<'a> eframe::App for MyApp<'a> {
                 //
                 self.rx.as_ref().map(|rx| {
                     if let Ok(render_progress) = rx.try_recv() {
-                        dbg!(render_progress.loops);
+                        self.current_loop = render_progress.loops;
 
                         let image = render_progress
                             .raw_image
@@ -387,6 +395,7 @@ impl<'a> eframe::App for MyApp<'a> {
 
                 match &self.current_image {
                     Some((image, raw_image)) => {
+                        ui.label(format!("loop: {}", self.current_loop));
                         ui.add_sized(image.size().unwrap(), image.clone());
 
                         ui.separator();

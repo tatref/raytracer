@@ -71,14 +71,14 @@ pub fn cornell_box(render_params: RenderParams, _t: f64, _idx: u64) -> World {
     //);
     //objects.push(prism);
 
-    let sphere = Object::new(
-        Shape::Circle(Circle::new(DVec2::new(300., 400.), 50.)),
-        Material::Dielectric {
-            //ior: Ior::Cauchy { a: 1.45, b: 0.1 },
-            ior: Ior::Cauchy { a: 1.45, b: 0.04 },
-        },
-    );
-    objects.push(sphere);
+    //let sphere = Object::new(
+    //    Shape::Circle(Circle::new(DVec2::new(300., 400.), 50.)),
+    //    Material::Dielectric {
+    //        //ior: Ior::Cauchy { a: 1.45, b: 0.1 },
+    //        ior: Ior::Cauchy { a: 1.45, b: 0.04 },
+    //    },
+    //);
+    //objects.push(sphere);
 
     let sides = 4;
     let points: Vec<DVec2> = (0..sides)
@@ -120,7 +120,7 @@ pub fn simple_world(render_params: RenderParams, _t: f64, _idx: u64) -> World {
     world
 }
 
-pub fn colors_world(render_params: RenderParams, _t: f64, _idx: u64) -> World {
+pub fn spectrum_world(render_params: RenderParams, _t: f64, _idx: u64) -> World {
     let mut objects = Vec::new();
 
     let spacing = 80.;
