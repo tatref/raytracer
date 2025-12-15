@@ -3,7 +3,7 @@
 
 use std::{
     io::Write,
-    sync::mpsc::{self, Receiver, Sender},
+    sync::mpsc::{self, Receiver, Sender, SyncSender},
     thread::{self, JoinHandle, Thread},
 };
 
@@ -83,9 +83,10 @@ enum WorldList {
 struct MyApp<'a> {
     load_world: WorldList,
     world: World,
+    world_time: f64,
     texture_handle: Option<TextureHandle>,
     current_image: Option<(Image<'a>, RawImage)>,
-    tx: Option<Sender<RenderCommand>>,
+    tx: Option<SyncSender<RenderCommand>>,
     rx: Option<Receiver<RenderProgress>>,
     render_thread: Option<JoinHandle<()>>,
     current_loop: usize,
@@ -101,7 +102,7 @@ impl<'a> Default for MyApp<'a> {
         let denoiser = Denoiser {
             mask_size: 2,
             oversampling_factor: 1.,
-            top: 0.0005,
+            top: 0.001,
             passes: 10,
         };
         let render_params = RenderParams {
@@ -110,8 +111,8 @@ impl<'a> Default for MyApp<'a> {
             width,
             recursion_limit,
             lambda_samples: 2,
-            //denoiser: Some(denoiser),
-            denoiser: None,
+            denoiser: Some(denoiser),
+            //denoiser: None,
         };
 
         let world = spectrum_world(render_params, 0., 0);
@@ -119,6 +120,7 @@ impl<'a> Default for MyApp<'a> {
         Self {
             load_world: WorldList::Spectrum,
             world,
+            world_time: 0.,
             texture_handle: None,
             current_image: None,
             tx: None,
@@ -133,8 +135,8 @@ impl<'a> MyApp<'a> {
     fn render(&mut self, ctx: &egui::Context) {
         println!("Starting render...");
 
-        let (tx1, rx1) = mpsc::channel();
-        let (tx2, rx2) = mpsc::channel();
+        let (tx1, rx1) = mpsc::sync_channel(5);
+        let (tx2, rx2) = mpsc::sync_channel(5);
 
         self.rx = Some(rx1);
         self.tx = Some(tx2);
@@ -194,6 +196,13 @@ impl<'a> eframe::App for MyApp<'a> {
                 .default_width(150.0)
                 .show(ctx, |ui| {
                     egui::ScrollArea::vertical().show(ui, |ui| {
+                        ui.label("Time");
+                        ui.add(
+                            egui::DragValue::new(&mut self.world_time)
+                                .speed(0.01)
+                                .range(0..=1),
+                        );
+
                         ui.heading("Load World");
                         egui::ComboBox::from_label("Load world")
                             .selected_text(format!("{:?}", self.load_world))
@@ -227,21 +236,31 @@ impl<'a> eframe::App for MyApp<'a> {
 
                         if ui.button("Load").clicked() {
                             self.world = match self.load_world {
-                                WorldList::Spectrum => {
-                                    spectrum_world(self.world.render_params.clone(), 0., 0)
-                                }
-                                WorldList::CornellBox => {
-                                    cornell_box(self.world.render_params.clone(), 0., 0)
-                                }
-                                WorldList::Simple => {
-                                    simple_world(self.world.render_params.clone(), 0., 0)
-                                }
-                                WorldList::Complex => {
-                                    complex_world(self.world.render_params.clone(), 0., 0)
-                                }
-                                WorldList::Sample => {
-                                    sample_world(self.world.render_params.clone(), 0., 0)
-                                }
+                                WorldList::Spectrum => spectrum_world(
+                                    self.world.render_params.clone(),
+                                    self.world_time,
+                                    0,
+                                ),
+                                WorldList::CornellBox => cornell_box(
+                                    self.world.render_params.clone(),
+                                    self.world_time,
+                                    0,
+                                ),
+                                WorldList::Simple => simple_world(
+                                    self.world.render_params.clone(),
+                                    self.world_time,
+                                    0,
+                                ),
+                                WorldList::Complex => complex_world(
+                                    self.world.render_params.clone(),
+                                    self.world_time,
+                                    0,
+                                ),
+                                WorldList::Sample => sample_world(
+                                    self.world.render_params.clone(),
+                                    self.world_time,
+                                    0,
+                                ),
                             };
                         }
 

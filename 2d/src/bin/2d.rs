@@ -42,7 +42,7 @@ fn main() {
         let t = idx as f64 / max as f64;
         let world = sample_world(render_params.clone(), t, idx);
 
-        let mut raw_image = world.render();
+        let mut raw_image = world.global_render();
         annotate(&mut raw_image, &world, DVec2::ZERO);
 
         let image = raw_image.convert_to_image(&ToneMappingMethod::Reinhard);

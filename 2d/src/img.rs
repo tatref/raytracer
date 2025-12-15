@@ -30,7 +30,7 @@ impl Default for PixelData {
     }
 }
 
-use std::ops::{Add, AddAssign, Div, Mul};
+use std::ops::{Add, AddAssign, Div, Mul, Sub};
 impl Add for PixelData {
     type Output = PixelData;
     fn add(self, rhs: Self) -> Self::Output {
@@ -132,15 +132,28 @@ impl RawImage {
         Ok(())
     }
 
-    pub fn map<T: Fn(PixelData) -> PixelData>(&mut self, f: T) -> RawImage {
+    pub fn abs(&self) -> RawImage {
         let mut image = RawImage::new(self.width, self.height);
 
         for (src, dst) in self.data.iter().zip(image.data.iter_mut()) {
-            *dst = f(*src);
+            *dst = PixelData {
+                weight: src.weight,
+                value: src.value.abs(),
+            }
         }
 
         image
     }
+
+    //pub fn map<T: Fn(PixelData) -> PixelData>(&mut self, f: T) -> RawImage {
+    //    let mut image = RawImage::new(self.width, self.height);
+
+    //    for (src, dst) in self.data.iter().zip(image.data.iter_mut()) {
+    //        *dst = f(*src);
+    //    }
+
+    //    image
+    //}
 
     pub fn map_pixel<T: Fn(PixelData) -> PixelData>(&mut self, f: T) -> RawImage {
         let mut image = RawImage::new(self.width, self.height);
@@ -218,6 +231,27 @@ impl Add for RawImage {
             .zip(rhs.data.iter())
         {
             *dest = *src_self + *src_rhs;
+        }
+
+        sum
+    }
+}
+
+impl Sub for RawImage {
+    type Output = RawImage;
+    fn sub(self, rhs: Self) -> Self::Output {
+        let mut sum = RawImage::new(self.width, self.height);
+
+        for ((dest, src_self), src_rhs) in sum
+            .data
+            .iter_mut()
+            .zip(self.data.iter())
+            .zip(rhs.data.iter())
+        {
+            *dest = PixelData {
+                value: src_self.value - src_rhs.value,
+                weight: 1.,
+            };
         }
 
         sum

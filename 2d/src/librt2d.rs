@@ -7,7 +7,7 @@ use std::{
     f64::consts::PI,
     io::Write,
     os::raw,
-    sync::mpsc::{Receiver, Sender},
+    sync::mpsc::{Receiver, Sender, SyncSender},
 };
 
 use crate::{
@@ -15,6 +15,7 @@ use crate::{
     img::{Blending, PixelData, RawImage, ToneMappingMethod},
     spectrum::{SPECTRUM_SAMPLES, Spectrum},
 };
+use colorgrad::Gradient;
 use glam::{DVec2, IVec2, Vec3};
 use itertools::{Itertools, iproduct};
 use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
@@ -951,6 +952,7 @@ impl World {
         pixels
     }
 
+    // single uniform pass for all pixels
     pub fn global_render(&self) -> RawImage {
         let mut raw_image = RawImage::new(self.render_params.width, self.render_params.height);
 
@@ -973,50 +975,51 @@ impl World {
         raw_image
     }
 
-    pub fn render(&self) -> RawImage {
-        //let aabb_color = Color::new(1., 0., 1.);
-        //self.quadtree.draw(&mut raw_image, aabb_color);
+    //pub fn render(&self) -> RawImage {
+    //    //let aabb_color = Color::new(1., 0., 1.);
+    //    //self.quadtree.draw(&mut raw_image, aabb_color);
 
-        let mut raw_image = self.global_render();
+    //    let mut raw_image = self.global_render();
 
-        let image = raw_image.convert_to_image(&ToneMappingMethod::Reinhard);
-        image.save("raw.png").unwrap();
+    //    let image = raw_image.convert_to_image(&ToneMappingMethod::Reinhard);
+    //    image.save("raw.png").unwrap();
 
-        match &self.render_params.denoiser {
-            Some(denoiser) => {
-                for pass in 0..denoiser.passes {
-                    let chrono = std::time::Instant::now();
-                    self.denoise(&self.render_params, &mut raw_image, pass);
-                    let elapsed = chrono.elapsed();
-                    println!("denoise pass={}/{}: {:?}", pass, denoiser.passes, elapsed);
-                    //let image = raw_image.convert_to_image(&ToneMappingMethod::Reinhard);
-                    //image.save(format!("out/raw_{}.png", pass)).unwrap();
-                }
-                raw_image
-            }
-            None => raw_image,
-        }
-    }
+    //    match &self.render_params.denoiser {
+    //        Some(denoiser) => {
+    //            for pass in 0..denoiser.passes {
+    //                let chrono = std::time::Instant::now();
+    //                self.denoise(&self.render_params, &mut raw_image, pass);
+    //                let elapsed = chrono.elapsed();
+    //                println!("denoise pass={}/{}: {:?}", pass, denoiser.passes, elapsed);
+    //                //let image = raw_image.convert_to_image(&ToneMappingMethod::Reinhard);
+    //                //image.save(format!("out/raw_{}.png", pass)).unwrap();
+    //            }
+    //            raw_image
+    //        }
+    //        None => raw_image,
+    //    }
+    //}
 
-    pub fn endless_render(&self, tx: Sender<RenderProgress>, rx: Receiver<RenderCommand>) {
-        let mut raw_image = self.global_render();
+    pub fn endless_render(&self, tx: SyncSender<RenderProgress>, rx: Receiver<RenderCommand>) {
+        let mut merged_image = self.global_render();
         let render_progress = RenderProgress {
             loops: 0,
-            raw_image: raw_image.clone(),
+            raw_image: merged_image.clone(),
         };
-        if let Err(e) = tx.send(render_progress) {
+        if let Err(e) = tx.try_send(render_progress) {
             println!("Can't send render_progress: {:?}", e);
         }
 
         let mut i = 1;
+        let total_chrono = std::time::Instant::now();
         loop {
             println!("loop {}", i);
 
             let render_progress = RenderProgress {
                 loops: i,
-                raw_image: raw_image.clone(),
+                raw_image: merged_image.clone(),
             };
-            if let Err(e) = tx.send(render_progress) {
+            if let Err(e) = tx.try_send(render_progress) {
                 println!("Can't send render_progress: {:?}", e);
             }
             if let Ok(render_command) = rx.try_recv() {
@@ -1026,34 +1029,103 @@ impl World {
 
             let chrono = std::time::Instant::now();
             let mut loop_image = self.global_render();
+            let global_render_elapsed = chrono.elapsed();
+            println!("global_render: {:?}", global_render_elapsed);
 
-            raw_image = raw_image + loop_image;
-            if self.render_params.denoiser.is_some() {
-                self.denoise(&self.render_params, &mut raw_image, 10);
+            merged_image = merged_image + loop_image.clone();
+            match &self.render_params.denoiser {
+                Some(denoiser) => {
+                    for pass in 0..denoiser.passes {
+                        let chrono = std::time::Instant::now();
+                        self.denoise(&self.render_params, &mut merged_image, &loop_image, pass);
+                        println!(
+                            "denoise {}/{}: {:?}",
+                            pass,
+                            denoiser.passes,
+                            chrono.elapsed()
+                        );
+                    }
+                }
+                None => (),
             }
             let elapsed = chrono.elapsed();
             println!("render loop = {:?}", elapsed);
+
+            // find min/max for heatmap
+            let mut heatmap = merged_image.map_pixel(|pixeldata| PixelData {
+                weight: 1.,
+                value: Vec3::splat(pixeldata.weight),
+            });
+            let max = heatmap
+                .data
+                .iter()
+                .max_by(|a, b| a.value.x.total_cmp(&b.value.x))
+                .unwrap()
+                .value
+                .x;
+            let min = heatmap
+                .data
+                .iter()
+                .min_by(|a, b| a.value.x.total_cmp(&b.value.x))
+                .unwrap()
+                .value
+                .x;
+
+            let colormap = colorgrad::preset::inferno();
+            heatmap
+                .map_pixel(|pixeldata| {
+                    let t = (pixeldata.value.x - min) / max;
+                    let color = colormap.at(t);
+                    PixelData {
+                        value: Vec3::new(color.r, color.g, color.b),
+                        weight: 1.,
+                    }
+                })
+                .convert_to_image(&ToneMappingMethod::Reinhard)
+                .save("out/heatmap.png");
+
+            //    .convert_to_image(&ToneMappingMethod::Reinhard);
+            //heatmap.save("out/heatmap.png");
 
             let chrono = std::time::Instant::now();
 
             i += 1;
         }
+        let total_render_time = total_chrono.elapsed();
+        println!("total render time: {:?}", total_render_time);
     }
 
-    fn denoise(&self, render_params: &RenderParams, raw_image: &mut RawImage, pass: usize) {
+    /// denoise algorithm:
+    /// Take 2 images as input: A with a lot of samples (reference image), B with less samples
+    /// 1) calculate difference between the images, this highlights the noisy areas
+    /// 2) perform a laplace transform
+    /// 3) sort the pixels with the highest laplacian values
+    /// 4) add a mask surrounding the top pixels
+    /// 5) merge the masks together
+    /// 6) recompute the masked pixels
+    fn denoise(
+        &self,
+        render_params: &RenderParams,
+        merged_image: &mut RawImage,
+        loop_image: &RawImage,
+        pass: usize,
+    ) {
         let denoiser = render_params.denoiser.as_ref().unwrap();
+        let diff_image = (merged_image.clone() - loop_image.clone()).abs();
 
         let laplace_kernel = [[-1., -1., -1.], [-1., 8., -1.], [-1., -1., -1.]];
-        let laplace_image = raw_image
+        let laplace_image = diff_image
             .convolution(laplace_kernel)
             .map_pixel(|p| PixelData {
                 value: Vec3::splat(p.value.length()),
                 weight: 1.,
             });
-        //laplace_image
-        //    .convert_to_image(&ToneMappingMethod::Reinhard)
-        //    .save(format!("out/laplace_{}.png", pass))
-        //    .unwrap();
+        if let Err(e) = laplace_image
+            .convert_to_image(&ToneMappingMethod::Reinhard)
+            .save(format!("out/laplace_{}.png", pass))
+        {
+            println!("can't save laplace: {:?}", e);
+        }
 
         let mut sorted_pixels: Vec<(usize, &PixelData)> =
             laplace_image.data.iter().enumerate().collect();
@@ -1067,7 +1139,7 @@ impl World {
             .map(|(idx, _val)| *idx)
             .collect();
 
-        let mut recompute_mask = raw_image.clone();
+        let mut recompute_mask = merged_image.clone();
         let recompute_pixels: HashSet<IVec2> = recompute_indexes
             .iter()
             .map(|idx| {
@@ -1093,10 +1165,12 @@ impl World {
                 Blending::Replace,
             );
         }
-        //recompute_mask
-        //    .convert_to_image(&ToneMappingMethod::Reinhard)
-        //    .save(format!("out/mask_{}.png", pass))
-        //    .unwrap();
+        if let Err(e) = recompute_mask
+            .convert_to_image(&ToneMappingMethod::Reinhard)
+            .save(format!("out/mask_{}.png", pass))
+        {
+            println!("Can't save mask: {:?}", e);
+        }
 
         let xxx: Vec<_> = recompute_pixels
             .par_iter()
@@ -1114,7 +1188,7 @@ impl World {
                 value: spectrum.to_dvec3(),
                 weight: (render_params.spp as f32 * denoiser.oversampling_factor),
             };
-            let _ = raw_image.draw_pixel(pixel, pixel_data, Blending::Add);
+            let _ = merged_image.draw_pixel(pixel, pixel_data, Blending::Add);
         }
     }
 }
