@@ -913,7 +913,7 @@ impl World {
                     for _ in 0..self.render_params.lambda_samples {
                         let (lambda_idx, lambda) = Spectrum::rand_lambda();
                         let ior = ior.ior(lambda);
-                        let p = hit.p - hit.n * 10000. * f64::EPSILON;
+                        let p = hit.p - hit.n * 100000. * f64::EPSILON;
                         let refracted_ray = ray.dir.refract(hit.n, 1. / ior);
                         let r = if refracted_ray == DVec2::ZERO {
                             Ray2d::new(p, ray.dir.reflect(hit.n))

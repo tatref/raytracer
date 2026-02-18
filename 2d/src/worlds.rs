@@ -49,11 +49,20 @@ pub fn cornell_box(render_params: RenderParams, _t: f64, _idx: u64) -> World {
     );
     objects.push(sphere);
 
-    //let sphere = Object::new(
-    //    Shape::Circle(Circle::new(DVec2::new(500., 400.), 50.)),
-    //    Material::dieletric(1.5),
-    //);
-    //objects.push(sphere);
+    let sphere = Object::new(
+        Shape::Circle(Circle::new(DVec2::new(500., 400.), 50.)),
+        Material::dieletric(1.5),
+    );
+    objects.push(sphere);
+
+    let sphere = Object::new(
+        Shape::Circle(Circle::new(DVec2::new(300., 400.), 50.)),
+        Material::Dielectric {
+            //ior: Ior::Cauchy { a: 1.45, b: 0.1 },
+            ior: Ior::Cauchy { a: 1.45, b: 0.05 },
+        },
+    );
+    objects.push(sphere);
 
     //objects.push(sphere);
     //let sides = 3;
@@ -71,15 +80,6 @@ pub fn cornell_box(render_params: RenderParams, _t: f64, _idx: u64) -> World {
     //    },
     //);
     //objects.push(prism);
-
-    let sphere = Object::new(
-        Shape::Circle(Circle::new(DVec2::new(300., 400.), 50.)),
-        Material::Dielectric {
-            //ior: Ior::Cauchy { a: 1.45, b: 0.1 },
-            ior: Ior::Cauchy { a: 1.45, b: 0.05 },
-        },
-    );
-    objects.push(sphere);
 
     let sides = 4;
     let points: Vec<DVec2> = (0..sides)
