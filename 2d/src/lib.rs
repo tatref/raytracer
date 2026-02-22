@@ -5,6 +5,7 @@ use glam::Vec3;
 
 pub type Color = Vec3;
 
+pub mod aabb;
 pub mod distributed;
 pub mod img;
 pub mod librt2d;
