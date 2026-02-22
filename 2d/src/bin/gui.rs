@@ -112,7 +112,7 @@ impl<'a> Default for MyApp<'a> {
             recursion_limit,
             lambda_samples: 2,
             denoiser: Some(denoiser),
-            //denoiser: None,
+            use_quadtree: false,
         };
 
         let world = spectrum_world(render_params, 0., 0);
@@ -141,7 +141,8 @@ impl<'a> MyApp<'a> {
         self.rx = Some(rx1);
         self.tx = Some(tx2);
 
-        let world = self.world.clone();
+        let mut world = self.world.clone();
+        world.build_quadtree();
         let render_thread = thread::spawn(move || {
             world.endless_render(tx1, rx2);
         });
@@ -155,6 +156,7 @@ fn render_params_ui(ui: &mut Ui, render_params: &mut RenderParams) {
         ui.label("spp");
         ui.add(egui::DragValue::new(&mut render_params.spp).speed(1));
     });
+    ui.checkbox(&mut render_params.use_quadtree, "quadtree");
     ui.horizontal(|ui| {
         ui.label("recursion limit");
         ui.add(egui::DragValue::new(&mut render_params.recursion_limit).speed(1));

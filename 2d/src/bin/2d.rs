@@ -30,8 +30,8 @@ fn main() {
         width,
         recursion_limit,
         lambda_samples,
-        //denoiser,
         denoiser: None,
+        use_quadtree: false,
     };
 
     let max = 60;

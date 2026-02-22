@@ -507,6 +507,7 @@ pub struct RenderParams {
     pub recursion_limit: usize,
     pub lambda_samples: usize,
     pub denoiser: Option<Denoiser>,
+    pub use_quadtree: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -541,10 +542,6 @@ impl World {
             DVec2::new(800. / 2., 600. / 2.),
             DVec2::new(800. / 2., 600. / 2.),
         ));
-
-        for obj in objects.iter().cloned() {
-            quadtree.insert(obj);
-        }
 
         Self {
             objects,
@@ -591,22 +588,27 @@ impl World {
             return Spectrum::default();
         }
 
-        // Vec version
-        let mut hits: Vec<(Object, Hit2d)> = self
-            .objects
-            .iter()
-            .filter_map(|obj| ray.hit(&obj.shape).map(|hit| (obj.clone(), hit)))
-            .collect();
-        hits.sort_by(|(_, a), (_, b)| a.t.total_cmp(&b.t));
-        let Some((obj, hit)) = hits.first() else {
-            return Spectrum::default();
+        let (obj, hit): (Object, Hit2d) = if self.render_params.use_quadtree {
+            // Quadtree version
+            let hit: Option<(Object, Hit2d)> = self.quadtree.hit(ray);
+            let Some((obj, hit)) = hit else {
+                return Spectrum::default();
+            };
+            (obj, hit)
+        } else {
+            // Vec version
+            let mut hits: Vec<(Object, Hit2d)> = self
+                .objects
+                .iter()
+                .filter_map(|obj| ray.hit(&obj.shape).map(|hit| (obj.clone(), hit)))
+                .collect();
+            hits.sort_by(|(_, a), (_, b)| a.t.total_cmp(&b.t));
+            let first_hit = hits.first().cloned();
+            let Some((obj, hit)) = first_hit else {
+                return Spectrum::default();
+            };
+            (obj, hit)
         };
-
-        // Quadtree version
-        //let hit: Option<(Object, Hit2d)> = self.quadtree.hit(ray);
-        //let Some((obj, hit)) = hit else {
-        //    return Color::ZERO;
-        //};
 
         if hit.side == Side::Inside {
             match obj.mat {
@@ -776,6 +778,19 @@ impl World {
     //        None => raw_image,
     //    }
     //}
+
+    pub fn build_quadtree(&mut self) {
+        let chrono = std::time::Instant::now();
+
+        if self.render_params.use_quadtree {
+            for obj in self.objects.iter().cloned() {
+                self.quadtree.insert(obj);
+            }
+        }
+
+        let elapsed = chrono.elapsed();
+        println!("build quadtree time: {:?}", elapsed);
+    }
 
     pub fn endless_render(&self, tx: SyncSender<RenderProgress>, rx: Receiver<RenderCommand>) {
         let mut merged_image = self.global_render();

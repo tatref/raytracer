@@ -47,7 +47,7 @@ async fn main() {
         if is_mouse_button_pressed(MouseButton::Left) {
             let p = mouse_position();
             let center = DVec2::new(p.0 as f64, p.1 as f64);
-            let r = 10.;
+            let r = 2.;
             let circle = Shape::Circle(Circle::new(center, r));
             let obj = Object::new(
                 circle,
@@ -58,7 +58,6 @@ async fn main() {
             objects.push(obj.clone());
 
             let res = quadtree.insert(obj);
-            dbg!(res);
         }
 
         if is_mouse_button_pressed(MouseButton::Right) {
