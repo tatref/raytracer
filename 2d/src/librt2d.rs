@@ -323,7 +323,7 @@ pub enum Side {
     Outside,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct Hit2d {
     pub(crate) t: f64,
     pub(crate) p: DVec2,
@@ -332,8 +332,8 @@ pub struct Hit2d {
 }
 
 pub struct Ray2d {
-    pub(crate) origin: DVec2,
-    pub(crate) dir: DVec2,
+    pub origin: DVec2,
+    pub dir: DVec2,
 }
 
 impl Ray2d {

@@ -8,18 +8,19 @@ image = { version = "0.25", default-features = false, features = [
 	"png",
 	"serde",
 ] }
-glam = { version = "0.30", features = ["rand", "serde"] }
-rand = "0.9.2"
-rand_distr = "0.5.1"
+glam = { version = "0.32", features = ["rand", "serde"] }
+rand = "0.10"
+rand_distr = "0.6"
 noise-functions = "0.8.1"
 rayon = "1.11.0"
 rmp-serde = "1.3.0"
 serde = { version = "1.0.228", features = ["derive"] }
 itertools = "0.14.0"
-rand_chacha = "0.9.0"
+rand_chacha = "0.10"
 eframe = "0.33.2"
 egui_extras = { version = "0.33.2", features = ["all_loaders"] }
 palette = "0.7.6"
 egui_plot = "0.34.0"
 bytemuck = { version = "1.24.0", features = ["derive"] }
 colorgrad = { version = "0.8.0", features = ["preset"] }
+macroquad = { path = "macroquad" }

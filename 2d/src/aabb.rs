@@ -9,8 +9,8 @@ use crate::{
 
 #[derive(Clone, Copy, Serialize, Deserialize)]
 pub struct Aabb {
-    pub(crate) center: DVec2,
-    pub(crate) half_size: DVec2,
+    pub center: DVec2,
+    pub half_size: DVec2,
 }
 impl Aabb {
     pub fn new(center: DVec2, half_size: DVec2) -> Self {
@@ -28,7 +28,7 @@ impl Aabb {
 
     pub fn union(&self, other: &Self) -> Self {
         let min = (self.center - self.half_size).min(other.center - other.half_size);
-        let max = (self.center - self.half_size).max(other.center - other.half_size);
+        let max = (self.center + self.half_size).max(other.center + other.half_size);
 
         let center = min.midpoint(max);
         let half_size = (max - min) / 2.;
@@ -50,8 +50,13 @@ impl Aabb {
         let tmin = ty1.min(ty2).max(tmin);
         let tmax = ty1.max(ty2).min(tmax);
 
-        if tmax > tmin && tmax > 0. {
-            Some(tmax)
+        //if tmax > tmin && tmax > 0. {
+        //    Some(tmax)
+        //} else {
+        //    None
+        //}
+        if tmax >= tmin.max(0.0) {
+            Some(tmin.max(0.0))
         } else {
             None
         }
@@ -103,11 +108,11 @@ impl Aabb {
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Node {
     objects: Vec<Object>,
-    aabb: Aabb,
-    top_right: Option<Box<Node>>,
-    top_left: Option<Box<Node>>,
-    bottom_left: Option<Box<Node>>,
-    bottom_right: Option<Box<Node>>,
+    pub aabb: Aabb,
+    pub top_right: Option<Box<Node>>,
+    pub top_left: Option<Box<Node>>,
+    pub bottom_left: Option<Box<Node>>,
+    pub bottom_right: Option<Box<Node>>,
 }
 
 #[derive(Copy, Clone)]
@@ -143,21 +148,20 @@ impl Node {
 
         let sub_aabbs = [BottomLeft, BottomRight, TopLeft, TopRight].map(|dir| self.sub_aabb(dir));
 
-        for (node, sub_aabb) in [
-            &mut self.bottom_left,
-            &mut self.bottom_right,
-            &mut self.top_left,
-            &mut self.top_right,
-        ]
-        .iter_mut()
-        .zip(sub_aabbs)
-        {
-            if sub_aabb.contains(&obj.aabb()) {
+        for (node, sub_aabb) in self.iter_mut().iter_mut().zip(sub_aabbs) {
+            if sub_aabb.contains(&obj_aabb) {
                 let child = node.get_or_insert_with(|| Box::new(Node::new(sub_aabb)));
                 return child.insert(obj);
             }
         }
+        // does not fit in any children
 
+        if self.aabb.contains(&obj_aabb) {
+            self.objects.push(obj);
+            return true;
+        }
+
+        // can't insert
         return false;
     }
 
@@ -170,6 +174,24 @@ impl Node {
             Direction::BottomRight => self.aabb.center + DVec2::new(half_size.x, -half_size.y),
         };
         Aabb::new(center, half_size)
+    }
+
+    pub fn iter(&self) -> [&Option<Box<Node>>; 4] {
+        [
+            &self.bottom_left,
+            &self.top_left,
+            &self.top_right,
+            &self.bottom_right,
+        ]
+    }
+
+    pub fn iter_mut(&mut self) -> [&mut Option<Box<Node>>; 4] {
+        [
+            &mut self.bottom_left,
+            &mut self.top_left,
+            &mut self.top_right,
+            &mut self.bottom_right,
+        ]
     }
 
     pub fn hit(&self, ray: &Ray2d) -> Option<(Object, Hit2d)> {
