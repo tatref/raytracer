@@ -227,13 +227,12 @@ impl Node {
             .filter_map(|obj| ray.hit(&obj.shape).map(|hit| (obj, hit)))
             .collect();
 
-        let mut hits = Vec::new();
-        hits.extend(children_hits);
-        hits.extend(local_hits);
+        let first_hit = children_hits
+            .iter()
+            .chain(local_hits.iter())
+            .max_by(|(_, a), (_, b)| a.t.total_cmp(&b.t));
 
-        hits.sort_by(|(_, a), (_, b)| a.t.total_cmp(&b.t));
-
-        hits.first().cloned()
+        return first_hit.cloned();
     }
 
     pub fn draw(&self, raw_image: &mut RawImage, color: Color) {
