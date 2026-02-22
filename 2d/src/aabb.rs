@@ -194,14 +194,14 @@ impl Node {
         ]
     }
 
-    pub fn hit(&self, ray: &Ray2d) -> Option<(Object, Hit2d)> {
+    pub fn hit(&self, ray: &Ray2d) -> Option<(&Object, Hit2d)> {
         if self.aabb.hit(&ray).is_none() {
             // ray does not hit current node nor children
             return None;
         }
 
         // check if ray hits children
-        let children_hits: Vec<(Object, Hit2d)> = [
+        let children_hits: Vec<(&Object, Hit2d)> = [
             &self.bottom_left,
             &self.bottom_right,
             &self.top_left,
@@ -221,10 +221,10 @@ impl Node {
         .collect();
 
         // object could be in current node?
-        let local_hits: Vec<(Object, Hit2d)> = self
+        let local_hits: Vec<(&Object, Hit2d)> = self
             .objects
             .iter()
-            .filter_map(|obj| ray.hit(&obj.shape).map(|hit| (obj.clone(), hit)))
+            .filter_map(|obj| ray.hit(&obj.shape).map(|hit| (obj, hit)))
             .collect();
 
         let mut hits = Vec::new();

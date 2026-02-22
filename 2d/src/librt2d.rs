@@ -588,26 +588,26 @@ impl World {
             return Spectrum::default();
         }
 
-        let (obj, hit): (Object, Hit2d) = if self.render_params.use_quadtree {
+        let (obj, hit): (&Object, Hit2d) = if self.render_params.use_quadtree {
             // Quadtree version
-            let hit: Option<(Object, Hit2d)> = self.quadtree.hit(ray);
+            let hit: Option<(&Object, Hit2d)> = self.quadtree.hit(ray);
             let Some((obj, hit)) = hit else {
                 return Spectrum::default();
             };
             (obj, hit)
         } else {
             // Vec version
-            let mut hits: Vec<(Object, Hit2d)> = self
+            let mut hits: Vec<(&Object, Hit2d)> = self
                 .objects
                 .iter()
-                .filter_map(|obj| ray.hit(&obj.shape).map(|hit| (obj.clone(), hit)))
+                .filter_map(|obj| ray.hit(&obj.shape).map(|hit| (obj, hit)))
                 .collect();
             hits.sort_by(|(_, a), (_, b)| a.t.total_cmp(&b.t));
-            let first_hit = hits.first().cloned();
+            let first_hit = hits.first();
             let Some((obj, hit)) = first_hit else {
                 return Spectrum::default();
             };
-            (obj, hit)
+            (obj, hit.clone())
         };
 
         if hit.side == Side::Inside {
