@@ -47,10 +47,6 @@ Visible spectrum. Top: colored emission light. Bottom: white light + colored abs
  ![diffraction_dispersion.png](diffration_dispersion.png)
 
 
- Diffraction used to be much brighter at some point... not sure what happened
- ![diffraction_dispersion_old.png](diffration_dispersion_old.png)
-
-
 Test scene with 200 spheres emission, absorption, diffraction. Probably faster some day with space partitioning
 ![stress_test](stress_test.png)
 
