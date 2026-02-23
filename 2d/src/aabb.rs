@@ -38,14 +38,17 @@ impl Aabb {
 
     pub fn hit(&self, r: &Ray2d) -> Option<f64> {
         // https://tavianator.com/2011/ray_box.html
-        let tx1 = (self.center.x - self.half_size.x - r.origin.x) * r.dir.recip().x;
-        let tx2 = (self.center.x + self.half_size.x - r.origin.x) * r.dir.recip().x;
+
+        let r_dir_recip = r.dir.recip();
+
+        let tx1 = (self.center.x - self.half_size.x - r.origin.x) * r_dir_recip.x;
+        let tx2 = (self.center.x + self.half_size.x - r.origin.x) * r_dir_recip.x;
 
         let tmin = tx1.min(tx2);
         let tmax = tx1.max(tx2);
 
-        let ty1 = (self.center.y - self.half_size.y - r.origin.y) * r.dir.recip().y;
-        let ty2 = (self.center.y + self.half_size.y - r.origin.y) * r.dir.recip().y;
+        let ty1 = (self.center.y - self.half_size.y - r.origin.y) * r_dir_recip.y;
+        let ty2 = (self.center.y + self.half_size.y - r.origin.y) * r_dir_recip.y;
 
         let tmin = ty1.min(ty2).max(tmin);
         let tmax = ty1.max(ty2).min(tmax);
@@ -141,7 +144,7 @@ impl Node {
         let obj_aabb = obj.aabb();
 
         // too big to fit in children
-        if obj_aabb.half_size.cmpgt(self.aabb.half_size / 2.).any() {
+        if obj_aabb.half_size.cmpge(self.aabb.half_size / 2.).any() {
             self.objects.push(obj);
             return true;
         }
