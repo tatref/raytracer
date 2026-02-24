@@ -178,9 +178,12 @@ pub fn complex_world(render_params: RenderParams, _t: f64, _idx: u64) -> World {
 
     let materials = [
         Material::Reflective,
-        Material::emissive(Spectrum::color(SpectrumColor::White) * 0.08),
+        Material::emissive(Spectrum::color(SpectrumColor::White) * 0.06),
         Material::diffuse(Spectrum::color(SpectrumColor::White)),
-        Material::dieletric(1.5),
+        //Material::dieletric(1.5),
+        Material::Dielectric {
+            ior: Ior::Cauchy { a: 1.45, b: 0.0354 },
+        },
     ];
     let mut rng = rand::rng();
     for _ in 0..200 {

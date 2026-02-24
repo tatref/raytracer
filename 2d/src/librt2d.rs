@@ -577,13 +577,22 @@ impl World {
             let p = pixel.as_dvec2() + rand::random::<DVec2>() - DVec2::ONE / 2.;
             let ray = Ray2d::rand(p);
 
-            let spectrum = self.trace_ray(&ray, recursion_limit);
-            total_spectrum += spectrum;
+            let mut spectrum_spp = Spectrum::default();
+            for _ in 0..self.render_params.lambda_samples {
+                let (lambda_idx, lambda) = Spectrum::rand_lambda();
+                let spectrum_lambda_sample =
+                    self.trace_ray(&ray, lambda_idx, lambda, recursion_limit);
+                spectrum_spp += spectrum_lambda_sample;
+            }
+            spectrum_spp =
+                spectrum_spp / self.render_params.lambda_samples as f32 * SPECTRUM_SAMPLES as f32;
+
+            total_spectrum += spectrum_spp;
         }
         total_spectrum / spp as f32
     }
 
-    pub fn trace_ray(&self, ray: &Ray2d, depth: usize) -> Spectrum {
+    pub fn trace_ray(&self, ray: &Ray2d, lambda_idx: usize, lambda: f64, depth: usize) -> Spectrum {
         if depth == 0 {
             return Spectrum::default();
         }
@@ -612,32 +621,25 @@ impl World {
 
         if hit.side == Side::Inside {
             match obj.mat {
-                Material::Emissive { emission } => emission,
-                Material::Dielectric { ior } => {
-                    let mut total_spectrum = Spectrum::default();
-
-                    for _ in 0..self.render_params.lambda_samples {
-                        let (lambda_idx, lambda) = Spectrum::rand_lambda();
-
-                        let ior = ior.ior(lambda);
-                        let p = hit.p + hit.n * 10000. * f64::EPSILON;
-                        let refracted_ray = ray.dir.refract(-hit.n, ior);
-                        let r = if refracted_ray == DVec2::ZERO {
-                            Ray2d::new(p, ray.dir.reflect(-hit.n))
-                        } else {
-                            Ray2d::new(p, refracted_ray)
-                        };
-                        let mut spectrum = self.trace_ray(&r, depth - 1);
-                        for (i, l) in spectrum.data.iter_mut().enumerate() {
-                            if i != lambda_idx {
-                                *l = 0.;
-                            }
+                Material::Emissive { mut emission } => {
+                    for idx in 0..SPECTRUM_SAMPLES {
+                        if idx != lambda_idx {
+                            emission.data[idx] = 0.;
                         }
-                        total_spectrum += spectrum;
                     }
-
-                    total_spectrum / self.render_params.lambda_samples as f32
-                        * SPECTRUM_SAMPLES as f32
+                    emission
+                }
+                Material::Dielectric { ior } => {
+                    let ior = ior.ior(lambda);
+                    let p = hit.p + hit.n * 10000. * f64::EPSILON;
+                    let refracted_ray = ray.dir.refract(-hit.n, ior);
+                    let r = if refracted_ray == DVec2::ZERO {
+                        Ray2d::new(p, ray.dir.reflect(-hit.n))
+                    } else {
+                        Ray2d::new(p, refracted_ray)
+                    };
+                    let spectrum = self.trace_ray(&r, lambda_idx, lambda, depth - 1);
+                    spectrum
                 }
                 _ => Spectrum::default(),
             }
@@ -654,17 +656,17 @@ impl World {
                     let p = hit.p + hit.n * 10000. * f64::EPSILON;
                     let r = Ray2d::rand_hemisphere(p, hit.n);
 
-                    let light = self.trace_ray(&r, depth - 1);
+                    let light = self.trace_ray(&r, lambda_idx, lambda, depth - 1);
 
                     absorption * light
                 }
-                Material::Emissive {
-                    emission: emission_color,
-                } => {
-                    let total_dist = hit.t + 1.;
-                    let distance_coeff = 1. / (total_dist);
-                    let distance_coeff = 1.;
-                    emission_color * distance_coeff as f32
+                Material::Emissive { mut emission } => {
+                    for idx in 0..SPECTRUM_SAMPLES {
+                        if idx != lambda_idx {
+                            emission.data[idx] = 0.;
+                        }
+                    }
+                    emission
                 }
                 Material::DirectionalEmissive {
                     emission: emission_color,
@@ -683,32 +685,20 @@ impl World {
                     let p = hit.p + hit.n * 10000. * f64::EPSILON;
                     let r = Ray2d::new(p, ray.dir.reflect(hit.n));
 
-                    let col = self.trace_ray(&r, depth - 1);
+                    let col = self.trace_ray(&r, lambda_idx, lambda, depth - 1);
                     col
                 }
                 Material::Dielectric { ior } => {
-                    let mut total_spectrum = Spectrum::default();
-
-                    for _ in 0..self.render_params.lambda_samples {
-                        let (lambda_idx, lambda) = Spectrum::rand_lambda();
-                        let ior = ior.ior(lambda);
-                        let p = hit.p - hit.n * 100000. * f64::EPSILON;
-                        let refracted_ray = ray.dir.refract(hit.n, 1. / ior);
-                        let r = if refracted_ray == DVec2::ZERO {
-                            Ray2d::new(p, ray.dir.reflect(hit.n))
-                        } else {
-                            Ray2d::new(p, refracted_ray)
-                        };
-                        let mut spectrum = self.trace_ray(&r, depth - 1);
-                        for (i, l) in spectrum.data.iter_mut().enumerate() {
-                            if i != lambda_idx {
-                                *l = 0.;
-                            }
-                        }
-                        total_spectrum += spectrum;
-                    }
-                    total_spectrum / self.render_params.lambda_samples as f32
-                        * SPECTRUM_SAMPLES as f32
+                    let ior = ior.ior(lambda);
+                    let p = hit.p - hit.n * 100000. * f64::EPSILON;
+                    let refracted_ray = ray.dir.refract(hit.n, 1. / ior);
+                    let r = if refracted_ray == DVec2::ZERO {
+                        Ray2d::new(p, ray.dir.reflect(hit.n))
+                    } else {
+                        Ray2d::new(p, refracted_ray)
+                    };
+                    let spectrum = self.trace_ray(&r, lambda_idx, lambda, depth - 1);
+                    spectrum
                 }
             }
         }
@@ -780,16 +770,14 @@ impl World {
     //}
 
     pub fn build_quadtree(&mut self) {
-        let chrono = std::time::Instant::now();
-
         if self.render_params.use_quadtree {
+            let chrono = std::time::Instant::now();
             for obj in self.objects.iter().cloned() {
                 self.quadtree.insert(obj);
             }
+            let elapsed = chrono.elapsed();
+            println!("build quadtree time: {:?}", elapsed);
         }
-
-        let elapsed = chrono.elapsed();
-        println!("build quadtree time: {:?}", elapsed);
     }
 
     pub fn endless_render(&self, tx: SyncSender<RenderProgress>, rx: Receiver<RenderCommand>) {
