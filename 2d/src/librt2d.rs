@@ -606,13 +606,11 @@ impl World {
             (obj, hit)
         } else {
             // Vec version
-            let mut hits: Vec<(&Object, Hit2d)> = self
+            let first_hit: Option<(&Object, Hit2d)> = self
                 .objects
                 .iter()
                 .filter_map(|obj| ray.hit(&obj.shape).map(|hit| (obj, hit)))
-                .collect();
-            hits.sort_by(|(_, a), (_, b)| a.t.total_cmp(&b.t));
-            let first_hit = hits.first();
+                .min_by(|(_, a), (_, b)| a.t.total_cmp(&b.t));
             let Some((obj, hit)) = first_hit else {
                 return Spectrum::default();
             };
