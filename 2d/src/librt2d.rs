@@ -582,7 +582,7 @@ impl World {
                 let (lambda_idx, lambda) = Spectrum::rand_lambda();
                 let spectrum_lambda_sample =
                     self.trace_ray(&ray, lambda_idx, lambda, recursion_limit);
-                spectrum_spp += spectrum_lambda_sample;
+                spectrum_spp.data[lambda_idx] += spectrum_lambda_sample;
             }
             spectrum_spp =
                 spectrum_spp / self.render_params.lambda_samples as f32 * SPECTRUM_SAMPLES as f32;
@@ -592,16 +592,16 @@ impl World {
         total_spectrum / spp as f32
     }
 
-    pub fn trace_ray(&self, ray: &Ray2d, lambda_idx: usize, lambda: f64, depth: usize) -> Spectrum {
+    pub fn trace_ray(&self, ray: &Ray2d, lambda_idx: usize, lambda: f64, depth: usize) -> f32 {
         if depth == 0 {
-            return Spectrum::default();
+            return f32::default();
         }
 
         let (obj, hit): (&Object, Hit2d) = if self.render_params.use_quadtree {
             // Quadtree version
             let hit: Option<(&Object, Hit2d)> = self.quadtree.hit(ray);
             let Some((obj, hit)) = hit else {
-                return Spectrum::default();
+                return f32::default();
             };
             (obj, hit)
         } else {
@@ -612,21 +612,14 @@ impl World {
                 .filter_map(|obj| ray.hit(&obj.shape).map(|hit| (obj, hit)))
                 .min_by(|(_, a), (_, b)| a.t.total_cmp(&b.t));
             let Some((obj, hit)) = first_hit else {
-                return Spectrum::default();
+                return f32::default();
             };
             (obj, hit.clone())
         };
 
         if hit.side == Side::Inside {
             match obj.mat {
-                Material::Emissive { mut emission } => {
-                    for idx in 0..SPECTRUM_SAMPLES {
-                        if idx != lambda_idx {
-                            emission.data[idx] = 0.;
-                        }
-                    }
-                    emission
-                }
+                Material::Emissive { mut emission } => emission.data[lambda_idx],
                 Material::Dielectric { ior } => {
                     let ior = ior.ior(lambda);
                     let p = hit.p + hit.n * 10000. * f64::EPSILON;
@@ -639,7 +632,7 @@ impl World {
                     let spectrum = self.trace_ray(&r, lambda_idx, lambda, depth - 1);
                     spectrum
                 }
-                _ => Spectrum::default(),
+                _ => f32::default(),
             }
         } else {
             // outside
@@ -647,7 +640,7 @@ impl World {
                 Material::Diffuse { absorption } => {
                     if absorption == Spectrum::default() {
                         // 100% absorption
-                        return Spectrum::default();
+                        return f32::default();
                     }
 
                     // recurse
@@ -656,16 +649,9 @@ impl World {
 
                     let light = self.trace_ray(&r, lambda_idx, lambda, depth - 1);
 
-                    absorption * light
+                    absorption.data[lambda_idx] * light
                 }
-                Material::Emissive { mut emission } => {
-                    for idx in 0..SPECTRUM_SAMPLES {
-                        if idx != lambda_idx {
-                            emission.data[idx] = 0.;
-                        }
-                    }
-                    emission
-                }
+                Material::Emissive { mut emission } => emission.data[lambda_idx],
                 Material::DirectionalEmissive {
                     emission: emission_color,
                     angle,
@@ -673,9 +659,9 @@ impl World {
                 } => {
                     if ray.dir.dot(-hit.n) >= angle {
                         let distance_coeff = 1. / (hit.t + d);
-                        emission_color * distance_coeff as f32
+                        emission_color.data[lambda_idx] * distance_coeff as f32
                     } else {
-                        Spectrum::default()
+                        f32::default()
                     }
                 }
                 Material::Reflective => {
