@@ -46,6 +46,8 @@ Visible spectrum. Top: colored emission light. Bottom: white light + colored abs
  Dispersion test. Left [Cachy's equation](https://en.wikipedia.org/wiki/Cauchy%27s_equation) with dispersion. Right: Diffraction without dispersion.
  ![diffraction_dispersion.png](diffration_dispersion.png)
 
+Absorption - https://en.wikipedia.org/wiki/Beer%E2%80%93Lambert_law
+![absorption.png](absorption.png)
 
 Test scene with 200 spheres emission, absorption, diffraction. Probably faster some day with space partitioning
 ![stress_test](stress_test.png)

@@ -9,6 +9,81 @@ use crate::{
     spectrum::{Spectrum, SpectrumColor},
 };
 
+pub fn cornell_box_absorption(render_params: RenderParams, _t: f64, _idx: u64) -> World {
+    let mut objects = Vec::new();
+
+    let center = DVec2::new(
+        render_params.width as f64 / 2.,
+        render_params.height as f64 / 2.,
+    );
+    let light = Object::new(
+        Shape::Circle(Circle::new(center, 5.)),
+        Material::emissive(Spectrum::emission_from_color(SpectrumColor::White) * 0.5),
+    );
+    objects.push(light);
+
+    let top = Object::segment(
+        DVec2::new(200., 100.),
+        DVec2::new(600., 100.),
+        Material::diffuse(Spectrum::emission_from_color(SpectrumColor::White)),
+    );
+    objects.push(top);
+
+    let right = Object::segment(
+        DVec2::new(600., 100.),
+        DVec2::new(600., 500.),
+        Material::diffuse(Spectrum::emission_from_color(SpectrumColor::White)),
+    );
+    objects.push(right);
+
+    let left = Object::segment(
+        DVec2::new(200., 500.),
+        DVec2::new(200., 100.),
+        Material::diffuse(Spectrum::emission_from_color(SpectrumColor::White)),
+    );
+    objects.push(left);
+
+    let sphere = Object::new(
+        Shape::Circle(Circle::new(DVec2::new(300., 200.), 50.)),
+        Material::Dielectric {
+            ior: Ior::Cauchy { a: 1.45, b: 0.05 },
+            absorption: Spectrum::absorption_from_color(SpectrumColor::White) * 0.01,
+        },
+    );
+    objects.push(sphere);
+
+    let sphere = Object::new(
+        Shape::Circle(Circle::new(DVec2::new(500., 400.), 50.)),
+        Material::Dielectric {
+            ior: Ior::Cauchy { a: 1.45, b: 0.05 },
+            absorption: Spectrum::absorption_from_color(SpectrumColor::Cyan) * 0.01,
+        },
+    );
+    objects.push(sphere);
+
+    let sphere = Object::new(
+        Shape::Circle(Circle::new(DVec2::new(300., 400.), 50.)),
+        Material::Dielectric {
+            ior: Ior::Cauchy { a: 1.45, b: 0.05 },
+            absorption: Spectrum::absorption_from_color(SpectrumColor::Cyan) * 0.05,
+        },
+    );
+    objects.push(sphere);
+
+    let sphere = Object::new(
+        Shape::Circle(Circle::new(DVec2::new(500., 200.), 50.)),
+        Material::Dielectric {
+            ior: Ior::Cauchy { a: 1.45, b: 0.05 },
+            absorption: Spectrum::absorption_from_color(SpectrumColor::Orange) * 1.0,
+        },
+    );
+    objects.push(sphere);
+
+    let world = World::new(objects, render_params);
+
+    world
+}
+
 pub fn cornell_box(render_params: RenderParams, _t: f64, _idx: u64) -> World {
     let mut objects = Vec::new();
 
@@ -18,40 +93,40 @@ pub fn cornell_box(render_params: RenderParams, _t: f64, _idx: u64) -> World {
     );
     let light = Object::new(
         Shape::Circle(Circle::new(center, 5.)),
-        Material::emissive(Spectrum::color(SpectrumColor::White) * 0.5),
+        Material::emissive(Spectrum::emission_from_color(SpectrumColor::White) * 0.5),
     );
     objects.push(light);
 
     let top = Object::segment(
         DVec2::new(200., 100.),
         DVec2::new(600., 100.),
-        Material::diffuse(Spectrum::color(SpectrumColor::White)),
+        Material::diffuse(Spectrum::emission_from_color(SpectrumColor::White)),
     );
     objects.push(top);
 
     let right = Object::segment(
         DVec2::new(600., 100.),
         DVec2::new(600., 500.),
-        Material::diffuse(Spectrum::color(SpectrumColor::Red)),
+        Material::diffuse(Spectrum::emission_from_color(SpectrumColor::Red)),
     );
     objects.push(right);
 
     let left = Object::segment(
         DVec2::new(200., 500.),
         DVec2::new(200., 100.),
-        Material::diffuse(Spectrum::color(SpectrumColor::Blue)),
+        Material::diffuse(Spectrum::emission_from_color(SpectrumColor::Blue)),
     );
     objects.push(left);
 
     let sphere = Object::new(
         Shape::Circle(Circle::new(DVec2::new(300., 200.), 50.)),
-        Material::diffuse(Spectrum::color(SpectrumColor::White)),
+        Material::diffuse(Spectrum::emission_from_color(SpectrumColor::White)),
     );
     objects.push(sphere);
 
     let sphere = Object::new(
         Shape::Circle(Circle::new(DVec2::new(500., 400.), 50.)),
-        Material::dieletric(1.5),
+        Material::dieletric(1.5, Spectrum::emission_from_color(SpectrumColor::White)),
     );
     objects.push(sphere);
 
@@ -60,6 +135,7 @@ pub fn cornell_box(render_params: RenderParams, _t: f64, _idx: u64) -> World {
         Material::Dielectric {
             //ior: Ior::Cauchy { a: 1.45, b: 0.1 },
             ior: Ior::Cauchy { a: 1.45, b: 0.05 },
+            absorption: Spectrum::emission_from_color(SpectrumColor::White),
         },
     );
     objects.push(sphere);
@@ -90,7 +166,7 @@ pub fn cornell_box(render_params: RenderParams, _t: f64, _idx: u64) -> World {
         .collect();
     let xxx = Object::from_points(
         &points,
-        Material::diffuse(Spectrum::color(SpectrumColor::White)),
+        Material::diffuse(Spectrum::emission_from_color(SpectrumColor::White)),
     );
     objects.push(xxx);
 
@@ -105,14 +181,14 @@ pub fn simple_world(render_params: RenderParams, _t: f64, _idx: u64) -> World {
     let center = DVec2::new(400., 300.);
     let light = Object::new(
         Shape::Circle(Circle::new(center, 1.)),
-        Material::emissive(Spectrum::color(SpectrumColor::White) * 10.),
+        Material::emissive(Spectrum::emission_from_color(SpectrumColor::White) * 10.),
     );
     objects.push(light);
 
     let segment = Segment::new(DVec2::new(300., 200.), DVec2::new(500., 200.));
     let segment = Object::new(
         Shape::Segment(segment),
-        Material::diffuse(Spectrum::color(SpectrumColor::White)),
+        Material::diffuse(Spectrum::emission_from_color(SpectrumColor::White)),
     );
     objects.push(segment);
 
@@ -134,7 +210,7 @@ pub fn spectrum_world(render_params: RenderParams, _t: f64, _idx: u64) -> World 
     objects.push(wall);
 
     for (idx, color) in SpectrumColor::iter_colors().iter().enumerate() {
-        let spectrum = Spectrum::color(*color);
+        let spectrum = Spectrum::emission_from_color(*color);
 
         // top lights
         let center = DVec2::new(100. + idx as f64 * spacing, 150.);
@@ -148,14 +224,14 @@ pub fn spectrum_world(render_params: RenderParams, _t: f64, _idx: u64) -> World 
         let center = DVec2::new(100. + idx as f64 * spacing, 450.);
         let light = Object::new(
             Shape::Circle(Circle::new(center, 10.)),
-            Material::emissive(Spectrum::color(SpectrumColor::White) * 0.1),
+            Material::emissive(Spectrum::emission_from_color(SpectrumColor::White) * 0.1),
         );
         objects.push(light);
 
         // top walls
         let a = DVec2::new(100. - spacing / 2. + idx as f64 * spacing, 400.);
         let b = DVec2::new(100. - spacing / 2. + (idx + 1) as f64 * spacing, 400.);
-        let mat = Material::diffuse(Spectrum::color(*color));
+        let mat = Material::diffuse(Spectrum::emission_from_color(*color));
         //let mat = Material::diffuse(Spectrum::default());
         let colored_wall = Object::segment(a, b, mat);
         objects.push(colored_wall);
@@ -178,11 +254,12 @@ pub fn complex_world(render_params: RenderParams, _t: f64, _idx: u64) -> World {
 
     let materials = [
         Material::Reflective,
-        Material::emissive(Spectrum::color(SpectrumColor::White) * 0.06),
-        Material::diffuse(Spectrum::color(SpectrumColor::White)),
+        Material::emissive(Spectrum::emission_from_color(SpectrumColor::White) * 0.06),
+        Material::diffuse(Spectrum::emission_from_color(SpectrumColor::White)),
         //Material::dieletric(1.5),
         Material::Dielectric {
             ior: Ior::Cauchy { a: 1.45, b: 0.0354 },
+            absorption: Spectrum::emission_from_color(SpectrumColor::White),
         },
     ];
     let mut rng = rand::rng();
@@ -203,7 +280,7 @@ pub fn sample_world(render_params: RenderParams, t: f64, _idx: u64) -> World {
 
     let light = Object::new(
         Shape::Circle(Circle::new(DVec2::new(600., 400.), 20.)),
-        Material::emissive(Spectrum::color(SpectrumColor::White) * 0.1),
+        Material::emissive(Spectrum::emission_from_color(SpectrumColor::White) * 0.1),
     );
     objects.push(light);
 
@@ -220,6 +297,7 @@ pub fn sample_world(render_params: RenderParams, t: f64, _idx: u64) -> World {
         //Material::dieletric(1.5),
         Material::Dielectric {
             ior: Ior::Cauchy { a: 1.45, b: 0.0354 },
+            absorption: Spectrum::emission_from_color(SpectrumColor::White),
         },
     );
     objects.push(dielectric);
@@ -232,7 +310,7 @@ pub fn sample_world(render_params: RenderParams, t: f64, _idx: u64) -> World {
             ),
             10.,
         )),
-        Material::diffuse(Spectrum::color(SpectrumColor::Red)),
+        Material::diffuse(Spectrum::emission_from_color(SpectrumColor::Red)),
     );
     objects.push(diffuse);
 
@@ -250,7 +328,7 @@ pub fn sample_world(render_params: RenderParams, t: f64, _idx: u64) -> World {
 
     let big_light = Object::new(
         Shape::Circle(Circle::new(DVec2::new(50. + angle.sin() * 100., 100.), 20.)),
-        Material::emissive(Spectrum::color(SpectrumColor::White) * 0.1),
+        Material::emissive(Spectrum::emission_from_color(SpectrumColor::White) * 0.1),
     );
     objects.push(big_light);
 
@@ -283,24 +361,24 @@ pub fn sample_world(render_params: RenderParams, t: f64, _idx: u64) -> World {
 
     let wall = Object::new(
         Shape::Segment(Segment::new(DVec2::new(400., 0.), DVec2::new(800., 0.))),
-        Material::diffuse(Spectrum::color(SpectrumColor::White)),
+        Material::diffuse(Spectrum::emission_from_color(SpectrumColor::White)),
     );
 
     // ?
     objects.push(wall);
     let wall = Object::new(
         Shape::Segment(Segment::new(DVec2::new(0., 250.), DVec2::new(100., 250.))),
-        Material::diffuse(Spectrum::color(SpectrumColor::White)),
+        Material::diffuse(Spectrum::emission_from_color(SpectrumColor::White)),
     );
     objects.push(wall);
     let wall = Object::new(
         Shape::Segment(Segment::new(DVec2::new(110., 250.), DVec2::new(200., 250.))),
-        Material::diffuse(Spectrum::color(SpectrumColor::White)),
+        Material::diffuse(Spectrum::emission_from_color(SpectrumColor::White)),
     );
     objects.push(wall);
     let wall = Object::new(
         Shape::Segment(Segment::new(DVec2::new(200., 250.), DVec2::new(200., 500.))),
-        Material::diffuse(Spectrum::color(SpectrumColor::White)),
+        Material::diffuse(Spectrum::emission_from_color(SpectrumColor::White)),
     );
     objects.push(wall);
 
@@ -312,28 +390,28 @@ pub fn sample_world(render_params: RenderParams, t: f64, _idx: u64) -> World {
     let segment = Object::segment(
         center + DVec2::from_angle(angle + 1. * d_phi) * r,
         center + DVec2::from_angle(angle + 0. * d_phi) * r,
-        Material::diffuse(Spectrum::color(SpectrumColor::Red)),
+        Material::diffuse(Spectrum::emission_from_color(SpectrumColor::Red)),
     );
     objects.push(segment);
 
     let segment = Object::segment(
         center + DVec2::from_angle(angle + 2. * d_phi) * r,
         center + DVec2::from_angle(angle + 1. * d_phi) * r,
-        Material::diffuse(Spectrum::color(SpectrumColor::Green)),
+        Material::diffuse(Spectrum::emission_from_color(SpectrumColor::Green)),
     );
     objects.push(segment);
 
     let segment = Object::segment(
         center + DVec2::from_angle(angle + 3. * d_phi) * r,
         center + DVec2::from_angle(angle + 2. * d_phi) * r,
-        Material::diffuse(Spectrum::color(SpectrumColor::Blue)),
+        Material::diffuse(Spectrum::emission_from_color(SpectrumColor::Blue)),
     );
     objects.push(segment);
 
     let segment = Object::segment(
         center + DVec2::from_angle(angle + 4. * d_phi) * r,
         center + DVec2::from_angle(angle + 3. * d_phi) * r,
-        Material::diffuse(Spectrum::color(SpectrumColor::Yellow)),
+        Material::diffuse(Spectrum::emission_from_color(SpectrumColor::Yellow)),
     );
     objects.push(segment);
 
@@ -346,6 +424,7 @@ pub fn sample_world(render_params: RenderParams, t: f64, _idx: u64) -> World {
         //Material::dieletric(1.5),
         Material::Dielectric {
             ior: Ior::Cauchy { a: 1.45, b: 0.0354 },
+            absorption: Spectrum::emission_from_color(SpectrumColor::White),
         },
         //Material::diffuse(Color::ZERO),
     );

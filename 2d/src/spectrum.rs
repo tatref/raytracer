@@ -207,7 +207,11 @@ impl Spectrum {
             .map(|(idx, power)| (360 + idx as u16 * 5, power))
     }
 
-    pub fn color(color: SpectrumColor) -> Self {
+    pub fn absorption_from_color(color: SpectrumColor) -> Self {
+        Self::emission_from_color(SpectrumColor::White) - Self::emission_from_color(color)
+    }
+
+    pub fn emission_from_color(color: SpectrumColor) -> Self {
         let lambda = match color {
             SpectrumColor::Black => return Spectrum::default(),
             SpectrumColor::Violet => (380, 450),

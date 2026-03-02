@@ -25,12 +25,12 @@ fn full_spectrum() {
         image::ImageBuffer::new(n_colors * cell_size, n_colors * cell_size);
 
     for (idx_a, color_a) in SpectrumColor::iter_colors().iter().enumerate() {
-        let spectrum_a = Spectrum::color(*color_a);
+        let spectrum_a = Spectrum::emission_from_color(*color_a);
         let test = to_srgb(&spectrum_a);
         println!("{:?}: {:?}", color_a, test);
 
         for (idx_b, color_b) in SpectrumColor::iter_colors().iter().enumerate() {
-            let spectrum_b = Spectrum::color(*color_b);
+            let spectrum_b = Spectrum::emission_from_color(*color_b);
 
             let spectrum = (spectrum_a.clone() + spectrum_b) * 100.;
             let srgb = to_srgb(&spectrum);

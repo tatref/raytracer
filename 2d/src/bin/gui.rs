@@ -74,6 +74,7 @@ enum MaterialKind {
 #[derive(Debug, PartialEq, Eq)]
 enum WorldList {
     CornellBox,
+    CornellBoxAbsorption,
     Simple,
     Complex,
     Sample,
@@ -216,6 +217,11 @@ impl<'a> eframe::App for MyApp<'a> {
                                 );
                                 ui.selectable_value(
                                     &mut self.load_world,
+                                    WorldList::CornellBoxAbsorption,
+                                    "Cornell Box Absorption",
+                                );
+                                ui.selectable_value(
+                                    &mut self.load_world,
                                     WorldList::Complex,
                                     "Complex",
                                 );
@@ -244,6 +250,11 @@ impl<'a> eframe::App for MyApp<'a> {
                                     0,
                                 ),
                                 WorldList::CornellBox => cornell_box(
+                                    self.world.render_params.clone(),
+                                    self.world_time,
+                                    0,
+                                ),
+                                WorldList::CornellBoxAbsorption => cornell_box_absorption(
                                     self.world.render_params.clone(),
                                     self.world_time,
                                     0,
@@ -340,7 +351,7 @@ impl<'a> eframe::App for MyApp<'a> {
                                     //    );
                                     //});
                                 }
-                                Material::Dielectric { ior } => {
+                                Material::Dielectric { ior, absorption } => {
                                     ui.label("ior");
                                     match ior {
                                         Ior::Simple(ior) => {

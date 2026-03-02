@@ -395,7 +395,11 @@ pub enum Material {
     Reflective,
     Dielectric {
         ior: Ior,
+        /// white: no absorption, black: total absorption
+        /// https://en.wikipedia.org/wiki/Beer%E2%80%93Lambert_law
+        absorption: Spectrum,
     },
+    //SubSurfaceScattering {},
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
@@ -437,9 +441,10 @@ impl Material {
         Material::Diffuse { absorption }
     }
 
-    pub fn dieletric(ior: f64) -> Self {
+    pub fn dieletric(ior: f64, absorption: Spectrum) -> Self {
         Material::Dielectric {
             ior: Ior::Simple(ior),
+            absorption,
         }
     }
 }
@@ -620,7 +625,7 @@ impl World {
         if hit.side == Side::Inside {
             match obj.mat {
                 Material::Emissive { mut emission } => emission.data[lambda_idx],
-                Material::Dielectric { ior } => {
+                Material::Dielectric { ior, absorption } => {
                     let ior = ior.ior(lambda);
                     let p = hit.p + hit.n * 10000. * f64::EPSILON;
                     let refracted_ray = ray.dir.refract(-hit.n, ior);
@@ -629,8 +634,8 @@ impl World {
                     } else {
                         Ray2d::new(p, refracted_ray)
                     };
-                    let spectrum = self.trace_ray(&r, lambda_idx, lambda, depth - 1);
-                    spectrum
+                    let power = self.trace_ray(&r, lambda_idx, lambda, depth - 1);
+                    power * f32::exp(-hit.t as f32 * absorption.data[lambda_idx])
                 }
                 _ => f32::default(),
             }
@@ -672,7 +677,7 @@ impl World {
                     let col = self.trace_ray(&r, lambda_idx, lambda, depth - 1);
                     col
                 }
-                Material::Dielectric { ior } => {
+                Material::Dielectric { ior, absorption } => {
                     let ior = ior.ior(lambda);
                     let p = hit.p - hit.n * 100000. * f64::EPSILON;
                     let refracted_ray = ray.dir.refract(hit.n, 1. / ior);
@@ -681,8 +686,8 @@ impl World {
                     } else {
                         Ray2d::new(p, refracted_ray)
                     };
-                    let spectrum = self.trace_ray(&r, lambda_idx, lambda, depth - 1);
-                    spectrum
+                    let power = self.trace_ray(&r, lambda_idx, lambda, depth - 1);
+                    power
                 }
             }
         }
