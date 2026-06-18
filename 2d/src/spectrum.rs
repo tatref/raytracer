@@ -106,6 +106,7 @@ const SPECTRUM_TO_XYZ_MAP: [[f32; 3]; 95] = [
 pub const SPECTRUM_SAMPLES: usize = SPECTRUM_TO_XYZ_MAP.len();
 pub const SPECTRUM_LAMBDA_MIN: u16 = 360;
 pub const SPECTRUM_LAMBDA_MAX: u16 = 830;
+pub const SPECTRUM_STEP_SIZE: u16 = 5;
 
 /// ! Spectrum from 360 nm to 830 nm, increment by 5 nm
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -183,7 +184,10 @@ impl Spectrum {
 
     pub fn rand_lambda() -> (usize, f64) {
         let i = rand::random_range(0..SPECTRUM_SAMPLES);
-        return (i, i as f64 * 5. + 360.);
+        return (
+            i,
+            i as f64 * SPECTRUM_STEP_SIZE as f64 + SPECTRUM_LAMBDA_MIN as f64,
+        );
     }
 
     pub fn from(data: &[f32]) -> Result<Self, ()> {
@@ -204,7 +208,7 @@ impl Spectrum {
         self.data
             .iter_mut()
             .enumerate()
-            .map(|(idx, power)| (360 + idx as u16 * 5, power))
+            .map(|(idx, power)| (SPECTRUM_LAMBDA_MIN + idx as u16 * SPECTRUM_STEP_SIZE, power))
     }
 
     pub fn absorption_from_color(color: SpectrumColor) -> Self {
