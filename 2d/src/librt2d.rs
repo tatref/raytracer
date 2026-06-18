@@ -5,6 +5,7 @@ use std::{
     arch::x86_64::_MM_PERM_ABDA,
     collections::HashSet,
     f64::consts::PI,
+    fmt::Display,
     io::Write,
     os::raw,
     sync::mpsc::{Receiver, Sender, SyncSender},
@@ -19,6 +20,7 @@ use crate::{
 use colorgrad::Gradient;
 use glam::{DVec2, IVec2, Vec3};
 use itertools::{Itertools, iproduct};
+use rand_distr::Distribution;
 use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 
@@ -399,7 +401,10 @@ pub enum Material {
         /// https://en.wikipedia.org/wiki/Beer%E2%80%93Lambert_law
         absorption: Spectrum,
     },
-    //SubSurfaceScattering {},
+    SubSurfaceScattering {
+        sigma_a: Spectrum,
+        sigma_s: Spectrum,
+    },
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
@@ -504,11 +509,27 @@ impl Object {
     }
 }
 
+use enum2egui::{Gui, GuiInspect};
+use enum2str::EnumStr;
+
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Gui)]
+pub enum StopCondition {
+    Endless,
+    MaxLoops(usize),
+}
+
+impl Display for StopCondition {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 pub struct RenderParams {
     pub width: i32,
     pub height: i32,
     pub spp: usize,
+    pub stop_condition: StopCondition,
     pub recursion_limit: usize,
     pub lambda_samples: usize,
     pub denoiser: Option<Denoiser>,
@@ -637,6 +658,51 @@ impl World {
                     let power = self.trace_ray(&r, lambda_idx, lambda, depth - 1);
                     power * f32::exp(-hit.t as f32 * absorption.data[lambda_idx])
                 }
+                Material::SubSurfaceScattering { sigma_a, sigma_s } => {
+                    return f32::default();
+
+                    //TODO
+
+                    let sigma_t = sigma_a.data[lambda_idx] + sigma_s.data[lambda_idx];
+                    if sigma_t == 0. {
+                        return f32::default();
+                    }
+
+                    let bounces = 10;
+                    let mut absorb = 1.;
+                    let mut p;
+                    let mut r;
+
+                    while bounces > 0 {
+                        p = hit.p + hit.n * 10000. * f64::EPSILON;
+                        r = Ray2d::rand(p);
+                        fn find_next_hit_distance(r: &Ray2d, world: &World) -> f64 {
+                            0.
+                        }
+                        let d_surface = find_next_hit_distance(&r, self);
+
+                        let d2: f64 = rand_distr::Exp::new(sigma_t as f64)
+                            .unwrap()
+                            .sample(&mut rand::rng());
+
+                        if d_surface < d2 {
+                            // ouside
+                            todo!();
+                            break;
+                        } else {
+                            // still inside, continue random walk
+                            absorb *= sigma_s.data[lambda_idx] / sigma_t;
+                        }
+                        bounces -= 1;
+                    }
+                    if bounces == 0 {
+                        // black
+                        return f32::default();
+                    }
+
+                    let power = self.trace_ray(&r, lambda_idx, lambda, depth - 1);
+                    return power * absorb;
+                }
                 _ => f32::default(),
             }
         } else {
@@ -689,6 +755,8 @@ impl World {
                     let power = self.trace_ray(&r, lambda_idx, lambda, depth - 1);
                     power
                 }
+                //Material::SubSurfaceScattering { absorption } => todo!(),
+                _ => f32::default(),
             }
         }
     }
@@ -770,6 +838,11 @@ impl World {
     }
 
     pub fn endless_render(&self, tx: SyncSender<RenderProgress>, rx: Receiver<RenderCommand>) {
+        println!(
+            "Starting render. Stop condition={:?}",
+            self.render_params.stop_condition
+        );
+
         let mut merged_image = self.global_render();
         let render_progress = RenderProgress {
             loops: 0,
@@ -779,13 +852,13 @@ impl World {
             println!("Can't send render_progress: {:?}", e);
         }
 
-        let mut i = 1;
+        let mut loop_n = 1;
         let total_chrono = std::time::Instant::now();
         loop {
-            println!("loop {}", i);
+            println!("loop {}", loop_n);
 
             let render_progress = RenderProgress {
-                loops: i,
+                loops: loop_n,
                 raw_image: merged_image.clone(),
             };
             if let Err(e) = tx.try_send(render_progress) {
@@ -850,7 +923,7 @@ impl World {
                         weight: 1.,
                     }
                 })
-                .convert_to_image(&ToneMappingMethod::Reinhard)
+                .convert_to_image(&ToneMappingMethod::Reinhard { param: 1. })
                 .save("out/heatmap.png");
 
             //    .convert_to_image(&ToneMappingMethod::Reinhard);
@@ -858,9 +931,18 @@ impl World {
 
             let chrono = std::time::Instant::now();
 
-            i += 1;
+            loop_n += 1;
+            match self.render_params.stop_condition {
+                StopCondition::Endless => (),
+                StopCondition::MaxLoops(max_loop) => {
+                    if loop_n > max_loop {
+                        break;
+                    }
+                }
+            }
         }
         let total_render_time = total_chrono.elapsed();
+        println!("Finished!");
         println!("total render time: {:?}", total_render_time);
     }
 
@@ -890,7 +972,7 @@ impl World {
                 weight: 1.,
             });
         if let Err(e) = laplace_image
-            .convert_to_image(&ToneMappingMethod::Reinhard)
+            .convert_to_image(&ToneMappingMethod::Reinhard { param: 1. })
             .save(format!("out/laplace_{}.png", pass))
         {
             println!("can't save laplace: {:?}", e);
@@ -935,7 +1017,7 @@ impl World {
             );
         }
         if let Err(e) = recompute_mask
-            .convert_to_image(&ToneMappingMethod::Reinhard)
+            .convert_to_image(&ToneMappingMethod::Reinhard { param: 1. })
             .save(format!("out/mask_{}.png", pass))
         {
             println!("Can't save mask: {:?}", e);

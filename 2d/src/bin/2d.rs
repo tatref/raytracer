@@ -27,6 +27,7 @@ fn main() {
     let render_params = RenderParams {
         height,
         spp,
+        stop_condition: StopCondition::MaxLoops(1),
         width,
         recursion_limit,
         lambda_samples,
@@ -45,7 +46,7 @@ fn main() {
         let mut raw_image = world.global_render();
         annotate(&mut raw_image, &world, DVec2::ZERO);
 
-        let image = raw_image.convert_to_image(&ToneMappingMethod::Reinhard);
+        let image = raw_image.convert_to_image(&ToneMappingMethod::Reinhard { param: 1. });
         image.save(&format!("out/out_{:04}.png", idx)).unwrap();
     }
     let elapsed = chrono.elapsed();

@@ -141,7 +141,7 @@ impl Default for Spectrum {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SpectrumColor {
     Black,
     Violet,

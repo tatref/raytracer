@@ -9,6 +9,81 @@ use crate::{
     spectrum::{Spectrum, SpectrumColor},
 };
 
+pub fn cornell_box_sss(render_params: RenderParams, _t: f64, _idx: u64) -> World {
+    let mut objects = Vec::new();
+
+    let center = DVec2::new(
+        render_params.width as f64 / 2.,
+        render_params.height as f64 / 2.,
+    );
+    let light = Object::new(
+        Shape::Circle(Circle::new(center, 5.)),
+        Material::emissive(Spectrum::emission_from_color(SpectrumColor::White) * 0.5),
+    );
+    objects.push(light);
+
+    let top = Object::segment(
+        DVec2::new(200., 100.),
+        DVec2::new(600., 100.),
+        Material::diffuse(Spectrum::emission_from_color(SpectrumColor::White)),
+    );
+    objects.push(top);
+
+    let right = Object::segment(
+        DVec2::new(600., 100.),
+        DVec2::new(600., 500.),
+        Material::diffuse(Spectrum::emission_from_color(SpectrumColor::White)),
+    );
+    objects.push(right);
+
+    let left = Object::segment(
+        DVec2::new(200., 500.),
+        DVec2::new(200., 100.),
+        Material::diffuse(Spectrum::emission_from_color(SpectrumColor::White)),
+    );
+    objects.push(left);
+
+    let sphere = Object::new(
+        Shape::Circle(Circle::new(DVec2::new(300., 200.), 50.)),
+        Material::SubSurfaceScattering {
+            sigma_a: Spectrum::absorption_from_color(SpectrumColor::Blue) * 0.5,
+            sigma_s: Spectrum::absorption_from_color(SpectrumColor::Orange) * 0.5,
+        },
+    );
+    objects.push(sphere);
+
+    //let sphere = Object::new(
+    //    Shape::Circle(Circle::new(DVec2::new(500., 400.), 50.)),
+    //    Material::Dielectric {
+    //        ior: Ior::Cauchy { a: 1.45, b: 0.05 },
+    //        absorption: Spectrum::absorption_from_color(SpectrumColor::Cyan) * 0.01,
+    //    },
+    //);
+    //objects.push(sphere);
+
+    //let sphere = Object::new(
+    //    Shape::Circle(Circle::new(DVec2::new(300., 400.), 50.)),
+    //    Material::Dielectric {
+    //        ior: Ior::Cauchy { a: 1.45, b: 0.05 },
+    //        absorption: Spectrum::absorption_from_color(SpectrumColor::Cyan) * 0.05,
+    //    },
+    //);
+    //objects.push(sphere);
+
+    //let sphere = Object::new(
+    //    Shape::Circle(Circle::new(DVec2::new(500., 200.), 50.)),
+    //    Material::Dielectric {
+    //        ior: Ior::Cauchy { a: 1.45, b: 0.05 },
+    //        absorption: Spectrum::absorption_from_color(SpectrumColor::Orange) * 1.0,
+    //    },
+    //);
+    //objects.push(sphere);
+
+    let world = World::new(objects, render_params);
+
+    world
+}
+
 pub fn cornell_box_absorption(render_params: RenderParams, _t: f64, _idx: u64) -> World {
     let mut objects = Vec::new();
 
@@ -126,7 +201,7 @@ pub fn cornell_box(render_params: RenderParams, _t: f64, _idx: u64) -> World {
 
     let sphere = Object::new(
         Shape::Circle(Circle::new(DVec2::new(500., 400.), 50.)),
-        Material::dieletric(1.5, Spectrum::emission_from_color(SpectrumColor::White)),
+        Material::dieletric(1.5, Spectrum::absorption_from_color(SpectrumColor::White)),
     );
     objects.push(sphere);
 
@@ -135,7 +210,7 @@ pub fn cornell_box(render_params: RenderParams, _t: f64, _idx: u64) -> World {
         Material::Dielectric {
             //ior: Ior::Cauchy { a: 1.45, b: 0.1 },
             ior: Ior::Cauchy { a: 1.45, b: 0.05 },
-            absorption: Spectrum::emission_from_color(SpectrumColor::White),
+            absorption: Spectrum::absorption_from_color(SpectrumColor::White),
         },
     );
     objects.push(sphere);
@@ -297,7 +372,7 @@ pub fn sample_world(render_params: RenderParams, t: f64, _idx: u64) -> World {
         //Material::dieletric(1.5),
         Material::Dielectric {
             ior: Ior::Cauchy { a: 1.45, b: 0.0354 },
-            absorption: Spectrum::emission_from_color(SpectrumColor::White),
+            absorption: Spectrum::absorption_from_color(SpectrumColor::White),
         },
     );
     objects.push(dielectric);
@@ -346,7 +421,7 @@ pub fn sample_world(render_params: RenderParams, t: f64, _idx: u64) -> World {
     for i in 0..n_points {
         let x = start_x + (end_x - start_x) * (i as f64 / n_points as f64);
         let dy = /*noise_loop.at(t, i as f64 / n_points as f64) */
-             ((i as f64 / n_points as f64 + t) * 2. * PI).sin() * 10.;
+             ((i as f64 / n_points as f64 + t) * 2. * PI * 2.).sin() * 10.;
         let p = DVec2::new(x, y + dy);
         points.push(p);
     }
@@ -356,7 +431,13 @@ pub fn sample_world(render_params: RenderParams, t: f64, _idx: u64) -> World {
     let strip = bezier.as_segments(100);
     let bezier_strip = Strip::new(&strip);
     //let bezier_obj = Object::new(Shape::Strip(bezier_strip), Material::diffuse(Color::ONE));
-    let bezier_obj = Object::new(Shape::Strip(bezier_strip), Material::Reflective);
+    let bezier_obj = Object::new(
+        Shape::Strip(bezier_strip),
+        Material::Dielectric {
+            ior: Ior::Cauchy { a: 1.45, b: 0.05 },
+            absorption: Spectrum::absorption_from_color(SpectrumColor::White),
+        },
+    );
     objects.push(bezier_obj);
 
     let wall = Object::new(
@@ -424,7 +505,7 @@ pub fn sample_world(render_params: RenderParams, t: f64, _idx: u64) -> World {
         //Material::dieletric(1.5),
         Material::Dielectric {
             ior: Ior::Cauchy { a: 1.45, b: 0.0354 },
-            absorption: Spectrum::emission_from_color(SpectrumColor::White),
+            absorption: Spectrum::absorption_from_color(SpectrumColor::White),
         },
         //Material::diffuse(Color::ZERO),
     );

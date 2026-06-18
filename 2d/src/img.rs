@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Copy, Clone)]
 pub enum ToneMappingMethod {
-    Reinhard,
+    Reinhard { param: f32 },
     Gamma { gamma: f32 },
 }
 
@@ -182,8 +182,8 @@ impl RawImage {
         let mut img: ImageBuffer<Rgba<u8>, Vec<u8>> =
             ImageBuffer::new(self.width as u32, self.height as u32);
 
-        fn tone_mapping_reinhard(v: f32) -> f32 {
-            v / (1. + v)
+        fn tone_mapping_reinhard(v: f32, param: f32) -> f32 {
+            v / (param + v)
         }
 
         //let max = self.data.iter().cloned().reduce(f32::max).unwrap();
@@ -195,10 +195,10 @@ impl RawImage {
                     //dst = ((src / max).powf(gamma) * 255.) as u8;
                     unimplemented!();
                 }
-                ToneMappingMethod::Reinhard => {
-                    dst[0] = (tone_mapping_reinhard(src.value.x) * 255.) as u8;
-                    dst[1] = (tone_mapping_reinhard(src.value.y) * 255.) as u8;
-                    dst[2] = (tone_mapping_reinhard(src.value.z) * 255.) as u8;
+                ToneMappingMethod::Reinhard { param } => {
+                    dst[0] = (tone_mapping_reinhard(src.value.x, param) * 255.) as u8;
+                    dst[1] = (tone_mapping_reinhard(src.value.y, param) * 255.) as u8;
+                    dst[2] = (tone_mapping_reinhard(src.value.z, param) * 255.) as u8;
                 }
             }
 

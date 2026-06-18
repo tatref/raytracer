@@ -8,19 +8,21 @@ image = { version = "0.25", default-features = false, features = [
 	"png",
 	"serde",
 ] }
-glam = { version = "0.32", features = ["rand", "serde"] }
-rand = "0.10"
-rand_distr = "0.6"
+bytemuck = { version = "1.24.0", features = ["derive"] }
+colorgrad = { version = "0.8.0", features = ["preset"] }
+eframe = "0.33"
+egui = "0.33"
+egui_extras = { version = "0.33", features = ["all_loaders"] }
+egui_plot = "0.34"
+enum2egui = "0.33"
+enum2str = { version = "0.1.18", features = ["try_from_string"] }
+glam = { version = "0.33", features = ["rand", "serde"] }
+itertools = "0.15"
 noise-functions = "0.8.1"
+palette = "0.7.6"
+rand = "0.10"
+rand_chacha = "0.10"
+rand_distr = "0.6"
 rayon = "1.11.0"
 rmp-serde = "1.3.0"
 serde = { version = "1.0.228", features = ["derive"] }
-itertools = "0.14.0"
-rand_chacha = "0.10"
-eframe = "0.33.2"
-egui_extras = { version = "0.33.2", features = ["all_loaders"] }
-palette = "0.7.6"
-egui_plot = "0.34.0"
-bytemuck = { version = "1.24.0", features = ["derive"] }
-colorgrad = { version = "0.8.0", features = ["preset"] }
-macroquad = { path = "macroquad" }
