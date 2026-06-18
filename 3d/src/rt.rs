@@ -218,13 +218,12 @@ impl World {
             return Color::ZERO;
         }
 
-        let mut hits: Vec<Hit> = objects
+        let mut hits = objects
             .iter()
             .filter_map(|object| object.hit(&ray))
-            .collect();
-        hits.sort_by(|a, b| a.t.total_cmp(&b.t));
+            .min_by(|a, b| a.t.total_cmp(&b.t));
 
-        match hits.first() {
+        match hits {
             Some(hit) => {
                 let bounce_dir = (random_on_hemisphere(hit.n) + hit.n).normalize();
                 let p = hit.p + hit.n * (100. * f64::EPSILON);
