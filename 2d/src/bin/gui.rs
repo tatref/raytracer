@@ -159,7 +159,7 @@ impl<'a> MyApp<'a> {
         v
     }
 
-    fn render(&mut self, ctx: &egui::Context) {
+    fn render(&mut self) {
         println!("Starting render...");
 
         let (tx1, rx1) = mpsc::sync_channel(5);
@@ -221,12 +221,13 @@ fn render_params_ui(ui: &mut Ui, render_params: &mut RenderParams) {
 }
 
 impl<'a> eframe::App for MyApp<'a> {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        egui::CentralPanel::default().show(ctx, |ui| {
-            egui::SidePanel::left("left_panel")
+    //fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        egui::CentralPanel::default().show_inside(ui, |ui| {
+            egui::Panel::left("left_panel")
                 .resizable(true)
-                .default_width(150.0)
-                .show(ctx, |ui| {
+                .default_size(150.0)
+                .show_inside(ui, |ui| {
                     egui::ScrollArea::vertical().show(ui, |ui| {
                         ui.label("Time");
                         ui.add(
@@ -299,7 +300,7 @@ impl<'a> eframe::App for MyApp<'a> {
 
                         if self.render_thread.is_none() {
                             if ui.button("Render").clicked() {
-                                self.render(ctx);
+                                self.render();
                             }
                         } else {
                             if ui.button("Stop").clicked() {
@@ -427,8 +428,8 @@ impl<'a> eframe::App for MyApp<'a> {
             //    .default_width(900.)
             //    .show_inside();
 
-            egui::CentralPanel::default().show(ctx, |ui| {
-                ctx.request_repaint_after_secs(0.2);
+            egui::CentralPanel::default().show_inside(ui, |ui| {
+                ui.request_repaint_after_secs(0.2);
 
                 ui.label("Tone mapping");
                 ui.add(
@@ -454,7 +455,7 @@ impl<'a> eframe::App for MyApp<'a> {
                         let image_size = image.size;
 
                         let handle =
-                            ctx.load_texture("image texture", image, TextureOptions::default());
+                            ui.load_texture("image texture", image, TextureOptions::default());
                         self.texture_handle = Some(handle.clone());
                         let sized_image = egui::load::SizedTexture::new(
                             handle.id(),
