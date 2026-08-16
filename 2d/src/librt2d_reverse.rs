@@ -49,7 +49,6 @@ pub struct ReverseRenderParams {
     pub recursion_limit: usize,
     pub lambda_samples: usize,
     pub denoiser: Option<Denoiser>,
-    pub use_quadtree: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -60,8 +59,9 @@ pub struct Denoiser {
     pub passes: usize,
 }
 
+#[derive(Clone)]
 pub struct ReverseRenderer {
-    render_params: ReverseRenderParams,
+    pub render_params: ReverseRenderParams,
 }
 
 impl ReverseRenderer {
@@ -158,51 +158,51 @@ impl ReverseRenderer {
                     let power = self.trace_ray(world, &r, lambda_idx, lambda, depth - 1);
                     power * f32::exp(-hit.t as f32 * absorption.data[lambda_idx])
                 }
-                Material::SubSurfaceScattering { sigma_a, sigma_s } => {
-                    return f32::default();
+                //Material::SubSurfaceScattering { sigma_a, sigma_s } => {
+                //    return f32::default();
 
-                    //TODO
+                //    //TODO
 
-                    let sigma_t = sigma_a.data[lambda_idx] + sigma_s.data[lambda_idx];
-                    if sigma_t == 0. {
-                        return f32::default();
-                    }
+                //    let sigma_t = sigma_a.data[lambda_idx] + sigma_s.data[lambda_idx];
+                //    if sigma_t == 0. {
+                //        return f32::default();
+                //    }
 
-                    let bounces = 10;
-                    let mut absorb = 1.;
-                    let mut p;
-                    let mut r;
+                //    let bounces = 10;
+                //    let mut absorb = 1.;
+                //    let mut p;
+                //    let mut r;
 
-                    while bounces > 0 {
-                        p = hit.p + hit.n * 10000. * f64::EPSILON;
-                        r = Ray2d::rand(p);
-                        fn find_next_hit_distance(r: &Ray2d, world: &World) -> f64 {
-                            0.
-                        }
-                        let d_surface = find_next_hit_distance(&r, world);
+                //    while bounces > 0 {
+                //        p = hit.p + hit.n * 10000. * f64::EPSILON;
+                //        r = Ray2d::rand(p);
+                //        fn find_next_hit_distance(r: &Ray2d, world: &World) -> f64 {
+                //            0.
+                //        }
+                //        let d_surface = find_next_hit_distance(&r, world);
 
-                        let d2: f64 = rand_distr::Exp::new(sigma_t as f64)
-                            .unwrap()
-                            .sample(&mut rand::rng());
+                //        let d2: f64 = rand_distr::Exp::new(sigma_t as f64)
+                //            .unwrap()
+                //            .sample(&mut rand::rng());
 
-                        if d_surface < d2 {
-                            // ouside
-                            todo!();
-                            break;
-                        } else {
-                            // still inside, continue random walk
-                            absorb *= sigma_s.data[lambda_idx] / sigma_t;
-                        }
-                        bounces -= 1;
-                    }
-                    if bounces == 0 {
-                        // black
-                        return f32::default();
-                    }
+                //        if d_surface < d2 {
+                //            // ouside
+                //            todo!();
+                //            break;
+                //        } else {
+                //            // still inside, continue random walk
+                //            absorb *= sigma_s.data[lambda_idx] / sigma_t;
+                //        }
+                //        bounces -= 1;
+                //    }
+                //    if bounces == 0 {
+                //        // black
+                //        return f32::default();
+                //    }
 
-                    let power = self.trace_ray(world, &r, lambda_idx, lambda, depth - 1);
-                    return power * absorb;
-                }
+                //    let power = self.trace_ray(world, &r, lambda_idx, lambda, depth - 1);
+                //    return power * absorb;
+                //}
                 _ => f32::default(),
             }
         } else {
@@ -424,7 +424,7 @@ impl ReverseRenderer {
 impl Renderer for ReverseRenderer {
     fn endless_render(
         &self,
-        world: &World,
+        world: World,
         tx: SyncSender<RenderProgress>,
         rx: Receiver<RenderCommand>,
     ) {
@@ -433,7 +433,7 @@ impl Renderer for ReverseRenderer {
             self.render_params.stop_condition
         );
 
-        let mut merged_image = self.global_render(world, &self.render_params);
+        let mut merged_image = self.global_render(&world, &self.render_params);
         let render_progress = RenderProgress {
             loops: 0,
             raw_image: merged_image.clone(),
@@ -460,7 +460,7 @@ impl Renderer for ReverseRenderer {
             }
 
             let chrono = std::time::Instant::now();
-            let mut loop_image = self.global_render(world, &self.render_params);
+            let mut loop_image = self.global_render(&world, &self.render_params);
             let global_render_elapsed = chrono.elapsed();
             println!("global_render: {:?}", global_render_elapsed);
 
@@ -470,7 +470,7 @@ impl Renderer for ReverseRenderer {
                     for pass in 0..denoiser.passes {
                         let chrono = std::time::Instant::now();
                         self.denoise(
-                            world,
+                            &world,
                             &self.render_params,
                             &mut merged_image,
                             &loop_image,

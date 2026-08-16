@@ -41,14 +41,14 @@ pub fn cornell_box_sss(camera: &Camera, _t: f64, _idx: u64) -> World {
     );
     objects.push(left);
 
-    let sphere = Object::new(
-        Shape::Circle(Circle::new(DVec2::new(300., 200.), 50.)),
-        Material::SubSurfaceScattering {
-            sigma_a: Spectrum::absorption_from_color(SpectrumColor::Blue) * 0.5,
-            sigma_s: Spectrum::absorption_from_color(SpectrumColor::Orange) * 0.5,
-        },
-    );
-    objects.push(sphere);
+    //let sphere = Object::new(
+    //    Shape::Circle(Circle::new(DVec2::new(300., 200.), 50.)),
+    //    Material::SubSurfaceScattering {
+    //        sigma_a: Spectrum::absorption_from_color(SpectrumColor::Blue) * 0.5,
+    //        sigma_s: Spectrum::absorption_from_color(SpectrumColor::Orange) * 0.5,
+    //    },
+    //);
+    //objects.push(sphere);
 
     //let sphere = Object::new(
     //    Shape::Circle(Circle::new(DVec2::new(500., 400.), 50.)),

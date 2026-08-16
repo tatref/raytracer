@@ -60,7 +60,7 @@ impl ForwardRenderer {
     }
 
     /// Compute list of ray bounces from origin
-    /// return [(ray, hit, power), ... ]
+    /// return [(ray, hit), ... ]
     /// decrease `depth`
     /// until `depth` == 0
     pub fn trace_ray(
@@ -69,9 +69,9 @@ impl ForwardRenderer {
         ray: &Ray2d,
         lambda_idx: usize,
         lambda: f64,
-        power: f32,
         depth: usize,
-    ) -> Vec<(Ray2d, Option<Hit2d>, f32)> {
+        power: f32,
+    ) -> Vec<(Ray2d, f32, Option<Hit2d>)> {
         if depth == 0 {
             return vec![];
         }
@@ -83,91 +83,104 @@ impl ForwardRenderer {
                 .filter_map(|obj| ray.hit(&obj.shape).map(|hit| (obj, hit)))
                 .min_by(|(_, a), (_, b)| a.t.total_cmp(&b.t));
             let Some((obj, hit)) = first_hit else {
-                return vec![(ray.clone(), None, power)];
+                return vec![(ray.clone(), power, None)];
             };
             (obj, hit.clone())
         };
 
-        return vec![(ray.clone(), Some(hit), power)];
+        // delete this
+        //return vec![(ray.clone(), power, Some(hit))];
 
-        /*
-            if hit.side == Side::Inside {
-                match obj.mat {
-                    Material::Emissive { mut emission } => emission.data[lambda_idx],
-                    Material::Dielectric { ior, absorption } => {
-                        let ior = ior.ior(lambda);
-                        let p = hit.p + hit.n * 10000. * f64::EPSILON;
-                        let refracted_ray = ray.dir.refract(-hit.n, ior);
-                        let r = if refracted_ray == DVec2::ZERO {
-                            Ray2d::new(p, ray.dir.reflect(-hit.n))
-                        } else {
-                            Ray2d::new(p, refracted_ray)
-                        };
-                        let power = self.trace_ray(&r, lambda_idx, lambda, depth - 1);
-                        power * f32::exp(-hit.t as f32 * absorption.data[lambda_idx])
-                    }
-                    Material::SubSurfaceScattering { sigma_a, sigma_s } =>
-                        {
+        if hit.side == Side::Inside {
+            match obj.mat {
+                Material::Emissive { mut emission } => {
+                    //emission.data[lambda_idx]
+                    return vec![];
+                }
+                Material::Dielectric { ior, absorption } => {
+                    let ior = ior.ior(lambda);
+                    let p = hit.p + hit.n * 10000. * f64::EPSILON;
+                    let refracted_ray = ray.dir.refract(-hit.n, ior);
+                    let r = if refracted_ray == DVec2::ZERO {
+                        Ray2d::new(p, ray.dir.reflect(-hit.n))
+                    } else {
+                        Ray2d::new(p, refracted_ray)
+                    };
+                    let new_power = power * f32::exp(-hit.t as f32 * absorption.data[lambda_idx]);
+                    let next = self.trace_ray(world, &r, lambda_idx, lambda, depth - 1, new_power);
+                    next
+                }
+                //Material::SubSurfaceScattering { sigma_a, sigma_s } => {
+                //    return vec![];
+                //}
+                _ => vec![],
+            }
+        } else {
+            // outside
+            match obj.mat {
+                Material::Diffuse { absorption } => {
+                    if absorption == Spectrum::default() {
+                        // 100% absorption
                         return vec![];
-                        }
-                    _ => vec![],
+                    }
+
+                    // recurse
+                    let p = hit.p + hit.n * 10000. * f64::EPSILON;
+                    let r = Ray2d::rand_hemisphere(p, hit.n);
+
+                    let new_power = absorption.data[lambda_idx] * power;
+                    if new_power > 0. {
+                        let next =
+                            self.trace_ray(world, &r, lambda_idx, lambda, depth - 1, new_power);
+                        next
+                    } else {
+                        vec![]
+                    }
                 }
-            } else {
-                // outside
-                match obj.mat {
-                    Material::Diffuse { absorption } => {
-                        if absorption == Spectrum::default() {
-                            // 100% absorption
-                            return vec![];
-                        }
-
-                        // recurse
-                        let p = hit.p + hit.n * 10000. * f64::EPSILON;
-                        let r = Ray2d::rand_hemisphere(p, hit.n);
-
-                        let light = self.trace_ray(&r, lambda_idx, lambda, depth - 1);
-
-                        absorption.data[lambda_idx] * light
-                    }
-                    Material::Emissive { mut emission } => emission.data[lambda_idx],
-                    Material::DirectionalEmissive {
-                        emission: emission_color,
-                        angle,
-                        d,
-                    } => {
-                        if ray.dir.dot(-hit.n) >= angle {
-                            let distance_coeff = 1. / (hit.t + d);
-                            emission_color.data[lambda_idx] * distance_coeff as f32
-                        } else {
-                            vec![],
-                        }
-                    }
-                    Material::Reflective => {
-                        // recurse
-                        let p = hit.p + hit.n * 10000. * f64::EPSILON;
-                        let r = Ray2d::new(p, ray.dir.reflect(hit.n));
-
-                        let col = self.trace_ray(&r, lambda_idx, lambda, depth - 1);
-                        col
-                    }
-                    Material::Dielectric { ior, absorption } => {
-                        let ior = ior.ior(lambda);
-                        let p = hit.p - hit.n * 100000. * f64::EPSILON;
-                        let refracted_ray = ray.dir.refract(hit.n, 1. / ior);
-                        let r = if refracted_ray == DVec2::ZERO {
-                            Ray2d::new(p, ray.dir.reflect(hit.n))
-                        } else {
-                            Ray2d::new(p, refracted_ray)
-                        };
-                        let power = self.trace_ray(&r, lambda_idx, lambda, depth - 1);
-                        power
-                    }
-                    //Material::SubSurfaceScattering { absorption } => todo!(),
-                    _ => vec![],
+                Material::Emissive { mut emission } => {
+                    //emission.data[lambda_idx]
+                    return vec![];
                 }
+                Material::DirectionalEmissive {
+                    emission: emission_color,
+                    angle,
+                    d,
+                } => {
+                    return vec![];
+                    //if ray.dir.dot(-hit.n) >= angle {
+                    //    let distance_coeff = 1. / (hit.t + d);
+                    //    emission_color.data[lambda_idx] * distance_coeff as f32
+                    //} else {
+                    //    vec![]
+                    //}
+                }
+                Material::Reflective => {
+                    // recurse
+                    let p = hit.p + hit.n * 10000. * f64::EPSILON;
+                    let r = Ray2d::new(p, ray.dir.reflect(hit.n));
+
+                    let new_power = power; // 100% reflective
+                    let next = self.trace_ray(world, &r, lambda_idx, lambda, depth - 1, new_power);
+                    next
+                }
+                Material::Dielectric { ior, absorption } => {
+                    let ior = ior.ior(lambda);
+                    let p = hit.p - hit.n * 100000. * f64::EPSILON;
+                    let refracted_ray = ray.dir.refract(hit.n, 1. / ior);
+                    let r = if refracted_ray == DVec2::ZERO {
+                        Ray2d::new(p, ray.dir.reflect(hit.n))
+                    } else {
+                        Ray2d::new(p, refracted_ray)
+                    };
+
+                    let new_power = power;
+                    let next = self.trace_ray(world, &r, lambda_idx, lambda, depth - 1, power);
+                    next
+                }
+                //Material::SubSurfaceScattering { absorption } => todo!(),
+                _ => vec![],
             }
         }
-        */
     }
 
     /// renderer entry point
@@ -180,21 +193,30 @@ impl ForwardRenderer {
             .iter()
             .filter(|obj| match obj.mat {
                 Material::Emissive { emission } => true,
+                Material::DirectionalEmissive { emission, angle, d } => true,
                 _ => false,
             })
             .collect();
 
         for obj in &emissive_objects {
-            let lambda_idx = 0;
-            let lambda = 1.;
-            let power = 1.;
+            fn sample_emission(mat: Material) -> (usize, f64, f32) {
+                let lambda_idx = 0;
+                let lambda = 1.;
+                let power = 1.;
 
-            for _ in 0..10000 {
+                (lambda_idx, lambda, power)
+            }
+
+            let (lambda_idx, lambda, power) = sample_emission(obj.mat);
+
+            for _ in 0..1000000 {
                 let ray = obj.shape.sample_out_ray();
-                let bounce_list = self.trace_ray(world, &ray, lambda_idx, lambda, power, 5);
+                let bounce_list = self.trace_ray(world, &ray, lambda_idx, lambda, 5, power);
 
-                for (ray, hit, power) in &bounce_list {
-                    for t in 0..500 {
+                for (ray, power, hit) in &bounce_list {
+                    let t_max = hit.map_or(1000., |hit| hit.t);
+
+                    for t in 0..(t_max as i32) {
                         let pixel = (ray.origin + ray.dir * t as f64).as_ivec2();
                         let pixel_data = PixelData {
                             value: Vec3::ONE,
@@ -221,7 +243,7 @@ impl ForwardRenderer {
 impl Renderer for ForwardRenderer {
     fn endless_render(
         &self,
-        world: &World,
+        world: World,
         tx: SyncSender<RenderProgress>,
         rx: Receiver<RenderCommand>,
     ) {
@@ -230,7 +252,7 @@ impl Renderer for ForwardRenderer {
             self.render_params.stop_condition
         );
 
-        let mut merged_image = self.global_render(world);
+        let mut merged_image = self.global_render(&world);
         let render_progress = RenderProgress {
             loops: 0,
             raw_image: merged_image.clone(),
@@ -257,7 +279,7 @@ impl Renderer for ForwardRenderer {
             }
 
             let chrono = std::time::Instant::now();
-            let mut loop_image = self.global_render(world);
+            let mut loop_image = self.global_render(&world);
             let global_render_elapsed = chrono.elapsed();
             println!("global_render: {:?}", global_render_elapsed);
 

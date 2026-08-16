@@ -33,7 +33,6 @@ fn main() {
         recursion_limit,
         lambda_samples,
         denoiser: None,
-        use_quadtree: false,
     };
     let camera = Camera {
         center: DVec2::new(width as f64, height as f64) / 2.,

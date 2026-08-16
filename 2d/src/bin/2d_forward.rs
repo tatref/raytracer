@@ -15,13 +15,13 @@ use raytracer::{
 fn main() {
     let width = 800;
     let height = 600;
-    let recursion_limit = 10;
-    let lambda_samples = 2;
+    let recursion_limit = 2;
+    let lambda_samples = 1;
 
     let render_params = ForwardRenderParams {
+        width,
         height,
         stop_condition: StopCondition::MaxLoops(1),
-        width,
         recursion_limit,
         lambda_samples,
     };
@@ -33,7 +33,7 @@ fn main() {
         center: DVec2::new(width as f64, height as f64) / 2.,
         size: DVec2::new(width as f64, height as f64) / 2.,
     };
-    let world = sample_world(&camera, 0., 0);
+    let world = cornell_box_absorption(&camera, 0., 0);
     let forward_renderer = ForwardRenderer::new(render_params);
 
     let mut raw_image = forward_renderer.global_render(&world);

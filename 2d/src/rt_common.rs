@@ -424,10 +424,10 @@ pub enum Material {
         /// https://en.wikipedia.org/wiki/Beer%E2%80%93Lambert_law
         absorption: Spectrum,
     },
-    SubSurfaceScattering {
-        sigma_a: Spectrum,
-        sigma_s: Spectrum,
-    },
+    //SubSurfaceScattering {
+    //    sigma_a: Spectrum,
+    //    sigma_s: Spectrum,
+    //},
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
@@ -573,7 +573,7 @@ pub enum RenderCommand {
 pub trait Renderer {
     fn endless_render(
         &self,
-        world: &World,
+        world: World,
         tx: SyncSender<RenderProgress>,
         rx: Receiver<RenderCommand>,
     );

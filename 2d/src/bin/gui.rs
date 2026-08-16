@@ -95,6 +95,7 @@ struct ColorMetadata {
 struct MyApp<'a> {
     load_world: WorldList,
     world: World,
+    renderer: ReverseRenderer,
     world_time: f64,
     texture_handle: Option<TextureHandle>,
     current_image: Option<(Image<'a>, RawImage)>,
@@ -127,8 +128,8 @@ impl<'a> Default for MyApp<'a> {
             recursion_limit,
             lambda_samples: 2,
             denoiser: Some(denoiser),
-            use_quadtree: false,
         };
+        let renderer = ReverseRenderer::new(&render_params);
 
         let camera = Camera {
             center: DVec2::new(width as f64 / 2., height as f64 / 2.),
@@ -149,6 +150,7 @@ impl<'a> Default for MyApp<'a> {
             current_loop: 0,
             objects_metadata,
             tone_mapping_param: 1.,
+            renderer,
         }
     }
 }
@@ -166,7 +168,7 @@ impl<'a> MyApp<'a> {
         v
     }
 
-    fn render(&mut self) {
+    fn start_render(&mut self) {
         println!("Starting render...");
 
         let (tx1, rx1) = mpsc::sync_channel(5);
@@ -175,10 +177,11 @@ impl<'a> MyApp<'a> {
         self.rx = Some(rx1);
         self.tx = Some(tx2);
 
-        let mut world = self.world.clone();
-        let renderer = ReverseRenderer::new();
+        let world = self.world.clone();
+        let renderer = self.renderer.clone();
         let render_thread = thread::spawn(move || {
-            renderer.endless_render(tx1, rx2);
+            let renderer: &dyn Renderer = &renderer;
+            renderer.endless_render(world, tx1, rx2);
         });
         self.render_thread = Some(render_thread);
     }
@@ -193,7 +196,6 @@ fn render_params_ui(ui: &mut Ui, render_params: &mut ReverseRenderParams) {
 
     render_params.stop_condition.ui_mut(ui);
 
-    ui.checkbox(&mut render_params.use_quadtree, "quadtree");
     ui.horizontal(|ui| {
         ui.label("recursion limit");
         ui.add(egui::DragValue::new(&mut render_params.recursion_limit).speed(1));
@@ -295,19 +297,18 @@ impl<'a> eframe::App for MyApp<'a> {
                                 WorldList::Sample => sample_world,
                             };
 
-                            self.world =
-                                load_world_fn(self.world.render_params.clone(), self.world_time, 0);
+                            self.world = load_world_fn(&self.world.camera, self.world_time, 0);
 
                             let objects_metadata = Self::refresh_objects_metadata(&self.world);
                         }
 
                         ui.separator();
 
-                        render_params_ui(ui, &mut self.world.render_params);
+                        render_params_ui(ui, &mut self.renderer.render_params);
 
                         if self.render_thread.is_none() {
                             if ui.button("Render").clicked() {
-                                self.render();
+                                self.start_render();
                             }
                         } else {
                             if ui.button("Stop").clicked() {
