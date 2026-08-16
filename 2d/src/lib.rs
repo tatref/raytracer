@@ -8,7 +8,9 @@ pub type Color = Vec3;
 pub mod aabb;
 pub mod distributed;
 pub mod img;
-pub mod librt2d;
+pub mod librt2d_forward;
+pub mod librt2d_reverse;
+pub mod rt_common;
 pub mod worlds;
 
 pub mod spectrum;

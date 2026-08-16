@@ -9,10 +9,13 @@ use std::{
 
 use eframe::egui::{self, CollapsingHeader, Image, TextureHandle, TextureOptions, Ui};
 use enum2egui::GuiInspect;
+use glam::DVec2;
 use image::EncodableLayout;
 use raytracer::{
     img::{RawImage, ToneMappingMethod},
-    librt2d::*,
+    librt2d_reverse::*,
+    rt_common::Camera,
+    rt_common::*,
     spectrum::{Spectrum, SpectrumColor},
     worlds::*,
 };
@@ -116,7 +119,7 @@ impl<'a> Default for MyApp<'a> {
             top: 0.001,
             passes: 0,
         };
-        let render_params = RenderParams {
+        let render_params = ReverseRenderParams {
             height,
             spp,
             stop_condition: StopCondition::Endless,
@@ -127,7 +130,11 @@ impl<'a> Default for MyApp<'a> {
             use_quadtree: false,
         };
 
-        let world = spectrum_world(render_params, 0., 0);
+        let camera = Camera {
+            center: DVec2::new(width as f64 / 2., height as f64 / 2.),
+            size: DVec2::new(width as f64 / 2., height as f64 / 2.),
+        };
+        let world = spectrum_world(&camera, 0., 0);
         let objects_metadata = Self::refresh_objects_metadata(&world);
 
         Self {
@@ -169,15 +176,15 @@ impl<'a> MyApp<'a> {
         self.tx = Some(tx2);
 
         let mut world = self.world.clone();
-        world.build_quadtree();
+        let renderer = ReverseRenderer::new();
         let render_thread = thread::spawn(move || {
-            world.endless_render(tx1, rx2);
+            renderer.endless_render(tx1, rx2);
         });
         self.render_thread = Some(render_thread);
     }
 }
 
-fn render_params_ui(ui: &mut Ui, render_params: &mut RenderParams) {
+fn render_params_ui(ui: &mut Ui, render_params: &mut ReverseRenderParams) {
     ui.heading("Render params");
     ui.horizontal(|ui| {
         ui.label("spp");

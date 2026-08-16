@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     Color,
     img::{Blending, PixelData, RawImage},
-    librt2d::{Hit2d, Object, Ray2d},
+    rt_common::{Hit2d, Object, Ray2d},
 };
 
 #[derive(Clone, Copy, Serialize, Deserialize)]

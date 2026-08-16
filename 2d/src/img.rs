@@ -1,3 +1,4 @@
+use colorgrad::Gradient;
 use glam::{IVec2, Vec3};
 use image::{ImageBuffer, Rgba};
 use itertools::Itertools;
@@ -206,6 +207,42 @@ impl RawImage {
         }
 
         img
+    }
+
+    pub fn to_heatmap(&self) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
+        let mut heatmap = self.clone();
+
+        heatmap.map_pixel(|pixeldata| PixelData {
+            weight: 1.,
+            value: Vec3::splat(pixeldata.weight),
+        });
+        let max = heatmap
+            .data
+            .iter()
+            .max_by(|a, b| a.value.x.total_cmp(&b.value.x))
+            .unwrap()
+            .value
+            .x;
+        let min = heatmap
+            .data
+            .iter()
+            .min_by(|a, b| a.value.x.total_cmp(&b.value.x))
+            .unwrap()
+            .value
+            .x;
+
+        let colormap = colorgrad::preset::inferno();
+
+        heatmap
+            .map_pixel(|pixeldata| {
+                let t = (pixeldata.value.x - min) / max;
+                let color = colormap.at(t);
+                PixelData {
+                    value: Vec3::new(color.r, color.g, color.b),
+                    weight: 1.,
+                }
+            })
+            .convert_to_image(&ToneMappingMethod::Reinhard { param: 1. })
     }
 }
 

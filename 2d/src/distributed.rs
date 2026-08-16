@@ -6,7 +6,7 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 
-use crate::{Color, librt2d::World};
+use crate::{Color, rt_common::*};
 
 #[derive(Serialize, Deserialize)]
 pub enum Message {

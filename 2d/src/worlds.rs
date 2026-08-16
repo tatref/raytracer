@@ -5,17 +5,15 @@ use rand::seq::IndexedRandom;
 
 use crate::{
     Color,
-    librt2d::*,
+    librt2d_reverse::*,
+    rt_common::*,
     spectrum::{Spectrum, SpectrumColor},
 };
 
-pub fn cornell_box_sss(render_params: RenderParams, _t: f64, _idx: u64) -> World {
+pub fn cornell_box_sss(camera: &Camera, _t: f64, _idx: u64) -> World {
     let mut objects = Vec::new();
 
-    let center = DVec2::new(
-        render_params.width as f64 / 2.,
-        render_params.height as f64 / 2.,
-    );
+    let center = camera.center;
     let light = Object::new(
         Shape::Circle(Circle::new(center, 5.)),
         Material::emissive(Spectrum::emission_from_color(SpectrumColor::White) * 0.5),
@@ -79,18 +77,15 @@ pub fn cornell_box_sss(render_params: RenderParams, _t: f64, _idx: u64) -> World
     //);
     //objects.push(sphere);
 
-    let world = World::new(objects, render_params);
+    let world = World::new(objects, camera);
 
     world
 }
 
-pub fn cornell_box_absorption(render_params: RenderParams, _t: f64, _idx: u64) -> World {
+pub fn cornell_box_absorption(camera: &Camera, _t: f64, _idx: u64) -> World {
     let mut objects = Vec::new();
 
-    let center = DVec2::new(
-        render_params.width as f64 / 2.,
-        render_params.height as f64 / 2.,
-    );
+    let center = camera.center;
     let light = Object::new(
         Shape::Circle(Circle::new(center, 5.)),
         Material::emissive(Spectrum::emission_from_color(SpectrumColor::White) * 0.5),
@@ -154,18 +149,15 @@ pub fn cornell_box_absorption(render_params: RenderParams, _t: f64, _idx: u64) -
     );
     objects.push(sphere);
 
-    let world = World::new(objects, render_params);
+    let world = World::new(objects, camera);
 
     world
 }
 
-pub fn cornell_box(render_params: RenderParams, _t: f64, _idx: u64) -> World {
+pub fn cornell_box(camera: &Camera, _t: f64, _idx: u64) -> World {
     let mut objects = Vec::new();
 
-    let center = DVec2::new(
-        render_params.width as f64 / 2.,
-        render_params.height as f64 / 2.,
-    );
+    let center = camera.center;
     let light = Object::new(
         Shape::Circle(Circle::new(center, 5.)),
         Material::emissive(Spectrum::emission_from_color(SpectrumColor::White) * 0.5),
@@ -245,15 +237,15 @@ pub fn cornell_box(render_params: RenderParams, _t: f64, _idx: u64) -> World {
     );
     objects.push(xxx);
 
-    let world = World::new(objects, render_params);
+    let world = World::new(objects, camera);
 
     world
 }
 
-pub fn simple_world(render_params: RenderParams, _t: f64, _idx: u64) -> World {
+pub fn simple_world(camera: &Camera, _t: f64, _idx: u64) -> World {
     let mut objects = Vec::new();
 
-    let center = DVec2::new(400., 300.);
+    let center = camera.center;
     let light = Object::new(
         Shape::Circle(Circle::new(center, 1.)),
         Material::emissive(Spectrum::emission_from_color(SpectrumColor::White) * 10.),
@@ -267,12 +259,12 @@ pub fn simple_world(render_params: RenderParams, _t: f64, _idx: u64) -> World {
     );
     objects.push(segment);
 
-    let world = World::new(objects, render_params);
+    let world = World::new(objects, camera);
 
     world
 }
 
-pub fn spectrum_world(render_params: RenderParams, _t: f64, _idx: u64) -> World {
+pub fn spectrum_world(camera: &Camera, _t: f64, _idx: u64) -> World {
     let mut objects = Vec::new();
 
     let spacing = 80.;
@@ -319,12 +311,12 @@ pub fn spectrum_world(render_params: RenderParams, _t: f64, _idx: u64) -> World 
         objects.push(colored_wall);
     }
 
-    let world = World::new(objects, render_params);
+    let world = World::new(objects, camera);
 
     world
 }
 
-pub fn complex_world(render_params: RenderParams, _t: f64, _idx: u64) -> World {
+pub fn complex_world(camera: &Camera, _t: f64, _idx: u64) -> World {
     let mut objects = Vec::new();
 
     let materials = [
@@ -345,12 +337,12 @@ pub fn complex_world(render_params: RenderParams, _t: f64, _idx: u64) -> World {
         objects.push(light);
     }
 
-    let world = World::new(objects, render_params);
+    let world = World::new(objects, camera);
 
     world
 }
 
-pub fn sample_world(render_params: RenderParams, t: f64, _idx: u64) -> World {
+pub fn sample_world(camera: &Camera, t: f64, _idx: u64) -> World {
     let mut objects = Vec::new();
 
     let light = Object::new(
@@ -543,7 +535,7 @@ pub fn sample_world(render_params: RenderParams, t: f64, _idx: u64) -> World {
     );
     objects.push(bezier);
 
-    let world = World::new(objects, render_params);
+    let world = World::new(objects, camera);
 
     world
 }

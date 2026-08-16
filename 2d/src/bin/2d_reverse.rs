@@ -7,7 +7,8 @@ use rand::{Rng, random_range, rng, seq::IndexedRandom};
 use raytracer::{
     Color,
     img::{Blending, RawImage, ToneMappingMethod},
-    librt2d::*,
+    librt2d_reverse::*,
+    rt_common::*,
     worlds::*,
 };
 
@@ -24,7 +25,7 @@ fn main() {
         mask_size: 2,
         passes: 1,
     });
-    let render_params = RenderParams {
+    let render_params = ReverseRenderParams {
         height,
         spp,
         stop_condition: StopCondition::MaxLoops(1),
@@ -34,6 +35,11 @@ fn main() {
         denoiser: None,
         use_quadtree: false,
     };
+    let camera = Camera {
+        center: DVec2::new(width as f64, height as f64) / 2.,
+        size: DVec2::new(width as f64, height as f64) / 2.,
+    };
+    let renderer = ReverseRenderer::new(&render_params);
 
     let max = 60;
     let chrono = std::time::Instant::now();
@@ -41,10 +47,10 @@ fn main() {
         println!("{}/{}", idx, max - 1);
 
         let t = idx as f64 / max as f64;
-        let world = sample_world(render_params.clone(), t, idx);
+        let world = sample_world(&camera, t, idx);
 
-        let mut raw_image = world.global_render();
-        annotate(&mut raw_image, &world, DVec2::ZERO);
+        let mut raw_image = renderer.global_render(&world, &render_params);
+        annotate(&mut raw_image, &camera, DVec2::ZERO);
 
         let image = raw_image.convert_to_image(&ToneMappingMethod::Reinhard { param: 1. });
         image.save(&format!("out/out_{:04}.png", idx)).unwrap();
