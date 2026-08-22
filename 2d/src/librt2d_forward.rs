@@ -209,19 +209,27 @@ impl ForwardRenderer {
 
             let (lambda_idx, lambda, power) = sample_emission(obj.mat);
 
-            for _ in 0..1000000 {
+            for _ in 0..1000 {
                 let ray = obj.shape.sample_out_ray();
                 let bounce_list = self.trace_ray(world, &ray, lambda_idx, lambda, 5, power);
 
                 for (ray, power, hit) in &bounce_list {
                     let t_max = hit.map_or(1000., |hit| hit.t);
 
-                    for t in 0..(t_max as i32) {
-                        let pixel = (ray.origin + ray.dir * t as f64).as_ivec2();
+                    use line_drawing::XiaolinWu;
+
+                    let start = ray.origin;
+                    let end = ray.origin + t_max * ray.dir;
+
+                    for ((x, y), value) in
+                        XiaolinWu::<f64, i32>::new((start.x, start.y), (end.x, end.y))
+                    {
+                        let pixel = IVec2::new(x, y);
                         let pixel_data = PixelData {
-                            value: Vec3::ONE,
+                            value: Vec3::ONE * value as f32,
                             weight: 1.,
                         };
+
                         let blending = Blending::Add;
                         raw_image.draw_pixel(pixel, pixel_data, blending);
                     }
@@ -235,6 +243,7 @@ impl ForwardRenderer {
         // pick random dir
         // pixels list = trace ray()
         // color pixels on image
+        // https://en.wikipedia.org/wiki/Xiaolin_Wu's_line_algorithm
 
         raw_image
     }

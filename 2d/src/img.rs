@@ -13,6 +13,7 @@ pub enum ToneMappingMethod {
 #[derive(Copy, Clone)]
 pub enum Blending {
     Add,
+    Blend,
     Replace,
 }
 
@@ -32,23 +33,23 @@ impl Default for PixelData {
 }
 
 use std::ops::{Add, AddAssign, Div, Mul, Sub};
-impl Add for PixelData {
-    type Output = PixelData;
-    fn add(self, rhs: Self) -> Self::Output {
-        let mut pixel_data = PixelData::default();
-        pixel_data.weight = self.weight + rhs.weight;
-        pixel_data.value =
-            (self.value * self.weight + rhs.value * rhs.weight) / (self.weight + rhs.weight);
-        pixel_data
-    }
-}
-impl AddAssign for PixelData {
-    fn add_assign(&mut self, rhs: Self) {
-        self.weight += rhs.weight;
-        self.value =
-            (self.value * self.weight + rhs.value * rhs.weight) / (self.weight + rhs.weight);
-    }
-}
+//impl Add for PixelData {
+//    type Output = PixelData;
+//    fn add(self, rhs: Self) -> Self::Output {
+//        let mut pixel_data = PixelData::default();
+//        pixel_data.weight = self.weight + rhs.weight;
+//        pixel_data.value =
+//            (self.value * self.weight + rhs.value * rhs.weight) / (self.weight + rhs.weight);
+//        pixel_data
+//    }
+//}
+//impl AddAssign for PixelData {
+//    fn add_assign(&mut self, rhs: Self) {
+//        self.weight += rhs.weight;
+//        self.value =
+//            (self.value * self.weight + rhs.value * rhs.weight) / (self.weight + rhs.weight);
+//    }
+//}
 impl Mul<f32> for PixelData {
     type Output = PixelData;
     fn mul(self, rhs: f32) -> Self::Output {
@@ -123,7 +124,14 @@ impl RawImage {
 
         match blending {
             Blending::Add => {
-                self.data[idx + 0] += pixel_data;
+                self.data[idx + 0].value += pixel_data.value;
+                self.data[idx + 0].weight += pixel_data.weight;
+            }
+            Blending::Blend => {
+                let weight = self.data[idx + 0].weight + pixel_data.weight;
+                let value = (self.data[idx + 0].value + pixel_data.value) / weight;
+                self.data[idx + 0].value = value;
+                self.data[idx + 0].weight = weight;
             }
             Blending::Replace => {
                 self.data[idx + 0] = pixel_data;
@@ -164,7 +172,7 @@ impl RawImage {
 
             for (i, j) in (0..(kernel.len() as i32)).cartesian_product(0..(kernel.len() as i32)) {
                 let pixel = IVec2::new(x + i, y + j);
-                pixel_data += self.get(pixel).unwrap_or(PixelData::default())
+                pixel_data.value += self.get(pixel).unwrap_or(PixelData::default()).value
                     * kernel[i as usize][j as usize];
             }
 
@@ -257,7 +265,8 @@ impl Add for RawImage {
             .zip(self.data.iter())
             .zip(rhs.data.iter())
         {
-            *dest = *src_self + *src_rhs;
+            // TODO: blending?
+            dest.value = src_self.value + src_rhs.value;
         }
 
         sum
